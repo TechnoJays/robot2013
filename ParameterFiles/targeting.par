@@ -1,0 +1,26 @@
+CAMERA_VIEW_ANGLE = 43.5 # actual angle=47
+CAMERA_IP_ADDRESS = 10.0.94.11
+CAMERA_RESOLUTION = 2 # 0=kResolution_640x480, 1=kResolution_640x360, 2=kResolution_320x240, kResolution_160x120
+FRAMES_PER_SECOND = 5
+COLOR_LEVEL = 50
+WHITE_BALANCE = 5 # 0=kWhiteBalance_Automatic, kWhiteBalance_Hold, kWhiteBalance_FixedOutdoor1, kWhiteBalance_FixedOutdoor2, kWhiteBalance_FixedIndoor, 5=kWhiteBalance_FixedFlourescent1, kWhiteBalance_FixedFlourescent2
+BRIGHTNESS = 50
+COMPRESSION = 30
+EXPOSURE = 1 # 0=kExposure_Automatic, 1=kExposure_Hold, kExposure_FlickerFree50Hz, kExposure_FlickerFree60Hz
+ANGLE_OF_TARGET_OFFSET = 0 # manual correction to add to angle of target calculations to compenstate for robot to camera difference
+THRESHOLD_TYPE = 0 # 0=HSV, 1=HSL, 2=RGB
+THRESHOLD_PLANE_1_LOW = 60
+THRESHOLD_PLANE_1_HIGH = 100
+THRESHOLD_PLANE_2_LOW = 90
+THRESHOLD_PLANE_2_HIGH = 255
+THRESHOLD_PLANE_3_LOW = 20
+THRESHOLD_PLANE_3_HIGH = 255
+PARTICLE_FILTER_FILLED_MINIMUM = 35 # minimum filled percent of rectangles to allow through filters
+PARTICLE_FILTER_FILLED_MAXIMUM = 65 # maximum filled percent of rectangles to allow through filters
+TARGET_RECTANGLE_RATIO_MINIMUM = 1.0 # minimum aspect ratio to allow through filters
+TARGET_RECTANGLE_RATIO_MAXIMUM = 3.2 # maximum aspect ratio to allow through filters
+TARGET_RECTANGLE_RATIO_THRESHOLD = 0.4 # threshold to use when comparing measured aspect ratio to known values
+TARGET_RECTANGLE_RATIO_HIGH = 3.1 # aspect ratio of hight goal
+TARGET_RECTANGLE_RATIO_MEDIUM = 2.13793 # aspect ratio of medium goal
+TARGET_RECTANGLE_RATIO_LOW = 1.15625 # aspect ratio of low goal
+TARGET_RECTANGLE_SCORE_THRESHOLD = 80.0 # minimum rectangularity value to pass filters, 78=circle, 100=perfect rectangle

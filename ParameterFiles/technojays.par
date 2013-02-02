@@ -1,0 +1,1 @@
+PERIOD = 0.0	# the rate for the periodic methods in the robot class, 0 = sync with DriverStation
