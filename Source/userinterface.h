@@ -96,7 +96,7 @@ private:
 	// Private member variables
 	int 	display_line_;		///< current text output line on the DriverStation
 	bool 	log_enabled_;		///< true if logging is enabled
-	char *parameters_file_;		///< path and filename of the parameter file to read
+	char parameters_file_[25];	///< path and filename of the parameter file to read
 	ProgramState robot_state_;	///< current state of the robot obtained from the field
 };
 

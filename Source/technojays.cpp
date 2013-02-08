@@ -1,13 +1,16 @@
 #include "WPILib.h"
 
 #include "autoscript.h"
+#include "climber.h"
 #include "common.h"
 #include "datalog.h"
 #include "drivetrain.h"
+#include "feeder.h"
 #include "parameters.h"
+#include "shooter.h"
+#include "targeting.h"
 #include "technojays.h"
 #include "userinterface.h"
-//#include "targeting.h"
 
 
 /**
@@ -43,20 +46,30 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	// Initialize public member variables
 
 	// Initialize private member objects
-	log_ = NULL;
-	parameters_ = NULL;
-	drive_train_ = NULL;
-	user_interface_ = NULL;
 	autoscript_ = NULL;
+	climber_ = NULL;
+	feeder_ = NULL;
+	log_ = NULL;
+	drive_train_ = NULL;
+	parameters_ = NULL;
+	shooter_ = NULL;
+	targeting_ = NULL;
+	timer_ = NULL;
+	user_interface_ = NULL;
+	current_target_ = ParticleAnalysisReport();
+	current_target_.imageHeight = 0;
+	current_target_.imageWidth = 0;
 
 	// Initialize private parameters
+	camera_boot_time_ = 30.0;
+	initial_target_search_time_ = 1.5;
 
 	// Initialize private member variables
 	log_enabled_ = false;
 	detailed_logging_enabled_ = false;
 	driver_turbo_ = false;
 	scoring_turbo_ = false;
-
+	
 	// Disable the watchdog timer
 	// Set this right away before we do anything else
 	GetWatchdog().SetEnabled(false);
@@ -72,15 +85,20 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	}
 
 	// Create timer objects
+	timer_ = new Timer();
 
 	// Attempt to read the parameters file
 	strncpy(parameters_file_, parameters, sizeof(parameters_file_));
 
 	LoadParameters();
 
-	drive_train_ = new DriveTrain("drivetrain.par", log_enabled_);
-	user_interface_ = new UserInterface("userinterface.par", log_enabled_);
+	targeting_ = new Targeting("targeting.par", log_enabled_);
 	autoscript_ = new AutoScript();
+	climber_ = new Climber("climber.par", log_enabled_);
+	drive_train_ = new DriveTrain("drivetrain.par", log_enabled_);
+	feeder_ = new Feeder("feeder.par", log_enabled_);
+	shooter_ = new Shooter("shooter.par", log_enabled_);
+	user_interface_ = new UserInterface("userinterface.par", log_enabled_);
 }
 
 /**
@@ -96,9 +114,7 @@ bool TechnoJays::LoadParameters() {
 	SafeDelete(parameters_);
 	
 	// Attempt to read the parameters file
-	// FIXME
-	//parameters_ = new Parameters(parameters_file_);
-	parameters_ = new Parameters("technojays.par");
+	parameters_ = new Parameters(parameters_file_);
 	if (parameters_ != NULL && parameters_->file_opened_) {
 		parameters_read = parameters_->ReadValues();
 		parameters_->Close();
@@ -111,9 +127,11 @@ bool TechnoJays::LoadParameters() {
 			log_->WriteLine("TechnoJays parameters failed to read\n");
 	}
 	
-	// Set elevator variables based on the parameters file
+	// Set variables based on the parameters file
 	if (parameters_read) {
 		parameters_->GetValue("PERIOD", &period);
+		parameters_->GetValue("CAMERA_BOOT_TIME", &camera_boot_time_);
+		parameters_->GetValue("INITIAL_TARGET_SEARCH_TIME", &initial_target_search_time_);
 	}
 
 	// Set the rate for the periodic methods
@@ -142,6 +160,14 @@ void TechnoJays::RobotInit() {
 */
 void TechnoJays::DisabledInit() {
 	// Set the current state of the robot
+	if (climber_ != NULL)
+		climber_->SetRobotState(kDisabled);
+	if (feeder_ != NULL)
+		feeder_->SetRobotState(kDisabled);
+	if (shooter_ != NULL)
+		shooter_->SetRobotState(kDisabled);
+	if (targeting_ != NULL)
+		targeting_->SetRobotState(kDisabled);
 	if (drive_train_ != NULL)
 		drive_train_->SetRobotState(kDisabled);
 	if (user_interface_ != NULL)
@@ -162,6 +188,22 @@ void TechnoJays::DisabledInit() {
 	}
 	
 	// Read sensor values in all the objects
+	if (shooter_ != NULL) {
+		shooter_->ReadSensors();
+	}
+	if (climber_ != NULL) {
+		climber_->ReadSensors();
+	}
+	if (drive_train_ != NULL) {
+		drive_train_->ReadSensors();
+	}
+	if (feeder_ != NULL)
+		feeder_->ReadSensors();
+	
+	// Reset and start a timer for camera initialization
+	timer_->Stop();
+	timer_->Reset();
+	timer_->Start();
 }
 
 /**
@@ -178,7 +220,38 @@ void TechnoJays::DisabledContinuous() {
 	// Make sure no motors are moving (to prevent motor safety errors)
 	if (drive_train_ != NULL) {
 		drive_train_->Drive(0.0, 0.0, false);
+	}
+	if (climber_ != NULL) {
+		climber_->Move(0.0, false);
 	}	
+	if (shooter_ != NULL) {
+		if (shooter_->pitch_enabled_)
+			shooter_->MovePitch(0.0, false);
+		if (shooter_->shooter_enabled_)
+			shooter_->Shoot(0);
+	}
+
+	if (feeder_ != NULL)
+		feeder_->ReadSensors();
+		if (feeder_->GetPressureSwitchState())
+			feeder_->SetCompressor(true);
+		else
+			feeder_->SetCompressor(false);
+	
+	// Initialize the targeting camera after a time delay
+	// The camera must be configured before use, but it has a long
+	//   bootup time, so a time delay is required.
+	// Get the timer value
+	double elapsed_time = timer_->Get();
+	if (elapsed_time >= camera_boot_time_) {
+		// Initialize the camera
+		if (targeting_ != NULL && targeting_->camera_enabled_) {
+			targeting_->InitializeCamera();
+		}
+		// Stop and reset the timer so that we don't keep trying to initialize over and over
+		timer_->Stop();
+		timer_->Reset();
+	}
 }
 
 /**
@@ -221,15 +294,29 @@ void TechnoJays::DisabledPeriodic() {
  * or starting/restarting timers.
 */
 void TechnoJays::AutonomousInit() {
+	// Reset the timer in case the camera initialization didn't
+	timer_->Stop();
+	timer_->Reset();
+
+	// Read the selected autonomous script file and get the first command
 	if (!autoscript_file_name_.empty() && autoscript_file_name_.size() > 0) {
 		autoscript_->Open(autoscript_file_name_.c_str());
 		autoscript_->ReadScript();
 		autoscript_->Close();
 		current_command_complete_ = false;
+		current_command_in_progress_ = false;
 		current_command_ = autoscript_->GetNextCommand(); 
 	}
 
 	// Set the current state of the robot
+	if (climber_ != NULL)
+		climber_->SetRobotState(kAutonomous);
+	if (feeder_ != NULL)
+		feeder_->SetRobotState(kAutonomous);	
+	if (shooter_ != NULL)
+		shooter_->SetRobotState(kAutonomous);
+	if (targeting_ != NULL)
+		targeting_->SetRobotState(kAutonomous);
 	if (drive_train_ != NULL)
 		drive_train_->SetRobotState(kAutonomous);
 	if (user_interface_ != NULL)
@@ -249,23 +336,189 @@ void TechnoJays::AutonomousInit() {
  * autonomous routine.
 */
 void TechnoJays::AutonomousContinuous() {
+	bool autoscript_finished = false;
+	
+	// Read sensor values in all the objects
+	if (shooter_ != NULL)
+		shooter_->ReadSensors();
+	if (drive_train_ != NULL)
+		drive_train_->ReadSensors();
+	if (climber_ != NULL)
+		climber_->ReadSensors();
+	if (feeder_ != NULL)
+		feeder_->ReadSensors();	
+		if (feeder_->GetPressureSwitchState())
+			feeder_->SetCompressor(true);
+		else
+			feeder_->SetCompressor(false);
+	
+	// If autoscript is defined, execute the commands
 	if (autoscript_ != NULL && !autoscript_file_name_.empty() && autoscript_file_name_.size() > 0) {
-		while ((strncmp(current_command_.command, "invalid", 255) != 0) && (strncmp(current_command_.command, "end", 255) != 0)) {
+		// Verify that the current command is not invalid or the end
+		if ((strncmp(current_command_.command, "invalid", 255) != 0) && (strncmp(current_command_.command, "end", 255) != 0)) {
+			// Execute current autoscript command
+			// General utilities
 			if (strncmp(current_command_.command, "wait", 255) == 0) {
-				current_command_complete_ = true;
+				if (current_command_.param1 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (!current_command_in_progress_) {
+						timer_->Stop();
+						timer_->Reset();
+						timer_->Start();
+						current_command_in_progress_ = true;
+					}
+					double time_left = 0.0;
+					double elapsed_time = 999.0;
+					// Get the timer value since we started moving
+					elapsed_time = timer_->Get();
+					// Calculate time left to move
+					time_left = (double) current_command_.param1 - elapsed_time;
+					if (time_left < 0) {
+						timer_->Stop();
+						current_command_complete_ = true;
+					}
+				}
 			}
+			// DriveTrain
+			else if (strncmp(current_command_.command, "adjustheading", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (drive_train_->AdjustHeading(current_command_.param1, current_command_.param2))
+						current_command_complete_ = true;
+				}
+			}
+			else if (strncmp(current_command_.command, "drivedistance", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (drive_train_->Drive((double) current_command_.param1, current_command_.param2))
+						current_command_complete_ = true;
+				}
+			}
+			else if (strncmp(current_command_.command, "drivetime", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (!current_command_in_progress_) {
+						drive_train_->ResetAndStartTimer();
+						current_command_in_progress_ = true;
+					}
+					if (drive_train_->Drive((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
+						current_command_complete_ = true;
+				}
+			}
+			else if (strncmp(current_command_.command, "turnheading", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (drive_train_->Turn(current_command_.param1, current_command_.param2))
+						current_command_complete_ = true;
+				}
+			}
+			else if (strncmp(current_command_.command, "turntime", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (!current_command_in_progress_) {
+						drive_train_->ResetAndStartTimer();
+						current_command_in_progress_ = true;
+					}
+					if (drive_train_->Turn((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
+						current_command_complete_ = true;
+				}
+			}
+			// Shooter
+			else if (strncmp(current_command_.command, "pitchposition", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (shooter_->SetPitch((int) current_command_.param1, current_command_.param2))
+						current_command_complete_ = true;
+				}
+			}
+			else if (strncmp(current_command_.command, "pitchtime", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (!current_command_in_progress_) {
+						shooter_->ResetAndStartTimer();
+						current_command_in_progress_ = true;
+					}
+					if (shooter_->SetPitch((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
+						current_command_complete_ = true;
+				}
+			}
+			else if (strncmp(current_command_.command, "shoottime", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (!current_command_in_progress_) {
+						shooter_->ResetAndStartTimer();
+						current_command_in_progress_ = true;
+					}
+					if (shooter_->Shoot((double) current_command_.param1, (int) current_command_.param2))
+						current_command_complete_ = true;
+				}
+			}
+			// Climber
+			else if (strncmp(current_command_.command, "climberposition", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (climber_->Set((int) current_command_.param1, current_command_.param2))
+						current_command_complete_ = true;
+				}
+			}
+			else if (strncmp(current_command_.command, "climbertime", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (!current_command_in_progress_) {
+						climber_->ResetAndStartTimer();
+						current_command_in_progress_ = true;
+					}
+					if (climber_->Set((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
+						current_command_complete_ = true;
+				}
+			}
+			// Targeting
+			// TODO
+			// Feeder
+			// TODO
+			// Catchall
 			else {
 				current_command_complete_ = true;
 			}
 			
+			// Get new command if current is finished
 			if (current_command_complete_) {
+				current_command_in_progress_ = false;
 				current_command_ = autoscript_->GetNextCommand();
 			}
 		}
+		else {
+			autoscript_finished = true;
+		}
 	}
 	else {
+		autoscript_finished = true;
+	}
+	
+	// If no autoscript or we're done, do nothing
+	if (autoscript_finished) {
 		if (drive_train_ != NULL) {
 			drive_train_->Drive(0.0, 0.0, false);
+		}
+		if (climber_ != NULL) {
+			climber_->Move(0.0, false);
+		}	
+		if (shooter_ != NULL) {
+			if (shooter_->pitch_enabled_)
+				shooter_->MovePitch(0.0, false);
+			if (shooter_->shooter_enabled_)
+				shooter_->Shoot(0);
 		}
 	}
 }
@@ -295,7 +548,19 @@ void TechnoJays::AutonomousPeriodic() {
  * starting/restarting timers.
 */
 void TechnoJays::TeleopInit() {
+	// Reset the timer in case the camera initialization didn't
+	timer_->Stop();
+	timer_->Reset();
+
 	// Set the current state of the robot
+	if (climber_ != NULL)
+		climber_->SetRobotState(kTeleop);
+	if (feeder_ != NULL)
+		feeder_->SetRobotState(kTeleop);
+	if (shooter_ != NULL)
+		shooter_->SetRobotState(kTeleop);
+	if (targeting_ != NULL)
+		targeting_->SetRobotState(kTeleop);
 	if (drive_train_ != NULL)
 		drive_train_->SetRobotState(kTeleop);
 	if (user_interface_ != NULL)
@@ -315,6 +580,31 @@ void TechnoJays::TeleopInit() {
  * running the semi-autonomous functions when requested from TeleopPeriodic().
 */
 void TechnoJays::TeleopContinuous() {
+	// Read sensor values in all the objects
+	if (shooter_ != NULL)
+		shooter_->ReadSensors();
+	if (drive_train_ != NULL)
+		drive_train_->ReadSensors();
+	if (climber_ != NULL)
+		climber_->ReadSensors();
+	if (feeder_ != NULL)
+		feeder_->ReadSensors();
+		if (feeder_->GetPressureSwitchState())
+			feeder_->SetCompressor(true);
+		else
+			feeder_->SetCompressor(false);
+
+	// Log detailed data if enabled
+	if (detailed_logging_enabled_) {
+		if (shooter_ != NULL)
+			shooter_->LogCurrentState();
+		if (drive_train_ != NULL)
+			drive_train_->LogCurrentState();
+		if (climber_ != NULL)
+			climber_->LogCurrentState();
+		if (feeder_ != NULL)
+			feeder_->LogCurrentState();
+	}
 }
 
 /**
@@ -374,7 +664,36 @@ void TechnoJays::TeleopPeriodic() {
 		// When there isn't any user input and no autonomous routines are running, we still have to
 		//   set the motors to not moving.
 		// The motors need to be controlled each loop iteration, or else we get motor safety errors.
-		// Arm
+		// Climber
+		if (scoring_right_y != 0.0) {
+			if (climber_ != NULL) {
+				climber_->Move(scoring_right_y, scoring_turbo_);
+			}
+		} else if (true) {
+			if (climber_ != NULL) {
+				climber_->Move(0.0, false);
+			}
+		}
+		// Shooter
+		if (scoring_left_y != 0.0) {
+			if (shooter_ != NULL) {
+				shooter_->MovePitch(scoring_left_y, scoring_turbo_);
+			}
+		} else if (true) {
+			if (shooter_ != NULL) {
+				shooter_->MovePitch(0.0, false);
+			}
+		}
+		if (user_interface_->GetButtonState(UserInterface::kScoring,
+				UserInterface::kLeftTrigger) == 1) {
+			if (shooter_ != NULL) {
+				shooter_->Shoot(100);
+			}
+		} else if (true) {
+			if (shooter_ != NULL) {
+				shooter_->Shoot(0);
+			}
+		}
 		// DriveTrain
 		if (driver_left_y != 0.0 || driver_right_x != 0.0) {
 			if (drive_train_ != NULL) {
@@ -386,6 +705,34 @@ void TechnoJays::TeleopPeriodic() {
 			}
 		}
 
+		// Log current state of each object when diagnostics button (BACK) is pressed on driver
+		if (user_interface_->GetButtonState(UserInterface::kDriver, UserInterface::kBack) == 1 
+				&& user_interface_->ButtonStateChanged(UserInterface::kDriver, UserInterface::kBack)) {
+			// Print title
+			user_interface_->OutputUserMessage("Diagnostics", true);
+			char output_buffer[22] = { 0 };
+			if (drive_train_ != NULL) {
+				drive_train_->LogCurrentState();
+				drive_train_->GetCurrentState(output_buffer);
+				user_interface_->OutputUserMessage(output_buffer, false);
+			}
+			if (shooter_ != NULL) {
+				shooter_->LogCurrentState();
+				shooter_->GetCurrentState(output_buffer);
+				user_interface_->OutputUserMessage(output_buffer, false);
+			}
+			if (climber_ != NULL) {
+				climber_->LogCurrentState();
+				climber_->GetCurrentState(output_buffer);
+				user_interface_->OutputUserMessage(output_buffer, false);
+			}
+			if (feeder_ != NULL) {
+				feeder_->LogCurrentState();
+				feeder_->GetCurrentState(output_buffer);
+				user_interface_->OutputUserMessage(output_buffer, false);
+			}
+		}
+		
 		// Toggle logging detailed mode when logging button (B) is pressed on driver
 		if (user_interface_->GetButtonState(UserInterface::kDriver,
 				UserInterface::kB) == 1 && user_interface_->ButtonStateChanged(

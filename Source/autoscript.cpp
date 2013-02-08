@@ -101,6 +101,7 @@ bool AutoScript::ReadScript() {
 				switch(param_index) {
 					case 0:
 						sscanf(current_token, "%s", c);
+						CharArrayToLower(current_token);
 						break;
 					case 1:
 						sscanf(current_token, "%f", &p1);

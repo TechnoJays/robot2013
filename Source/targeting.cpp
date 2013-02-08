@@ -118,7 +118,9 @@ void Targeting::Initialize(const char * parameters, bool logging_enabled) {
 	brightness_ = 100;
 	compression_ = 30;
 	exposure_ = 0;
-	angle_of_target_offset_ = 0.0;
+	angle_of_target_horiztonal_offset_ = 0.0;
+	angle_of_target_vertical_offset_ = 0.0;
+	angle_of_target_distance_offset_ = 0.0;
 	threshold_type_ = 0;
 	threshold_plane_1_low_ = 0;
 	threshold_plane_1_high_ = 50;
@@ -199,7 +201,9 @@ bool Targeting::LoadParameters() {
 		parameters_->GetValue("BRIGHTNESS", &brightness_);
 		parameters_->GetValue("COMPRESSION", &compression_);
 		parameters_->GetValue("EXPOSURE", &exposure_);
-		parameters_->GetValue("ANGLE_OF_TARGET_OFFSET", &angle_of_target_offset_);
+		parameters_->GetValue("ANGLE_OF_TARGET_HORIZONTAL_OFFSET", &angle_of_target_horiztonal_offset_);
+		parameters_->GetValue("ANGLE_OF_TARGET_VERTICAL_OFFSET", &angle_of_target_vertical_offset_);
+		parameters_->GetValue("ANGLE_OF_TARGET_DISTANCE_OFFSET", &angle_of_target_distance_offset_);
 		parameters_->GetValue("THRESHOLD_TYPE", &threshold_type_);
 		parameters_->GetValue("THRESHOLD_PLANE_1_LOW", &threshold_plane_1_low_);
 		parameters_->GetValue("THRESHOLD_PLANE_1_HIGH", &threshold_plane_1_high_);
@@ -282,9 +286,22 @@ void Targeting::SetLogState(bool state) {
  * \param target pointer to a ParticleAnalysisReport of an image target.
  * \return the number of degrees off target.
 */
-double Targeting::GetAngleOfTarget(ParticleAnalysisReport *target) {
-	double degrees_off_center = (-(camera_view_angle_ * ((target->imageWidth / 2.0) - target->center_mass_x)) / target->imageWidth) + angle_of_target_offset_;
+double Targeting::GetHorizontalAngleOfTarget(ParticleAnalysisReport *target) {
+	double degrees_off_center = (-(camera_view_angle_ * ((target->imageWidth / 2.0) - target->center_mass_x)) / target->imageWidth) + angle_of_target_horiztonal_offset_;
 	return degrees_off_center;
+}
+
+/**
+ * \brief Get the vertical angle in degrees from the robot to the target.
+ *
+ * \param target pointer to a ParticleAnalysisReport of an image target.
+ * \return the angle in degrees of the target.
+*/
+double Targeting::GetVerticalAngleOfTarget(ParticleAnalysisReport *target) {
+	double distance = GetCameraDistanceToTarget(target) + angle_of_target_distance_offset_;
+	double height = GetCameraHeightOfTarget(target);
+	double angle = (atan(height/distance) * 180.0 / PI) + angle_of_target_vertical_offset_;
+	return angle;
 }
 
 /**
@@ -335,6 +352,49 @@ double Targeting::GetCameraHeightOfTarget(ParticleAnalysisReport *target) {
 	// This isn't the actual height since it goes from the bottom of the image and not from the floor
 	//double height = ((camera_vertical_height_in_pixels_ - target->center_mass_y) / pixels_per_inch) / 12.0;
 	//return height;
+}
+
+/**
+ * \brief Get the height off the floor of the provided particle target as an enumeration.
+ *
+ * \param target pointer to a ParticleAnalysisReport of an image target.
+ * \return the height as an enumeration.
+*/
+Targeting::TargetHeight Targeting::GetEnumHeightOfTarget(ParticleAnalysisReport *target) {
+	double height = GetCameraHeightOfTarget(target);
+	if (height == 9.177083) {
+		return Targeting::kHigh;
+	}
+	else if (height == 8.2604167) {
+		return Targeting::kMedium;
+	}
+	else if (height == 2.583) {
+		return Targeting::kLow;
+	}
+	else {
+		return Targeting::kUnknown;
+	}
+}
+
+/**
+ * \brief Get the height off the floor of the provided value as an enumeration.
+ *
+ * \param height the height in feet.
+ * \return the height as an enumeration.
+*/
+Targeting::TargetHeight Targeting::GetEnumHeightOfTarget(double height) {
+	if (height == 9.177083) {
+		return Targeting::kHigh;
+	}
+	else if (height == 8.2604167) {
+		return Targeting::kMedium;
+	}
+	else if (height == 2.583) {
+		return Targeting::kLow;
+	}
+	else {
+		return Targeting::kUnknown;
+	}
 }
 
 /**

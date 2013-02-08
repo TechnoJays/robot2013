@@ -18,6 +18,17 @@ class DataLog;
 class Targeting {
 
 public:	
+	/**
+	 * \enum TargetHeight
+	 * \brief An enumeration of the possible target heights.
+	 */
+	enum TargetHeight {
+		kHigh,
+		kMedium,
+		kLow,
+		kUnknown
+	};
+
 	// Public methods
 	Targeting();
 	Targeting(bool logging_enabled);
@@ -27,9 +38,12 @@ public:
 	bool LoadParameters();
 	void SetRobotState(ProgramState state);
 	void SetLogState(bool state);
-	double GetAngleOfTarget(ParticleAnalysisReport *target);
+	double GetHorizontalAngleOfTarget(ParticleAnalysisReport *target);
+	double GetVerticalAngleOfTarget(ParticleAnalysisReport *target);
 	double GetCameraDistanceToTarget(ParticleAnalysisReport *target);
 	double GetCameraHeightOfTarget(ParticleAnalysisReport *target);
+	TargetHeight GetEnumHeightOfTarget(ParticleAnalysisReport *target);
+	TargetHeight GetEnumHeightOfTarget(double height);
 	double GetFOVPercentageOfTarget(ParticleAnalysisReport *target);
 	bool GetTargets(std::vector<ParticleAnalysisReport> &report);
 	void InitializeCamera();
@@ -60,7 +74,7 @@ private:
 	Parameters *parameters_;							///< parameters object used to load targeting parameters from a file
 
 	// Private parameters
-	char *camera_ip_address_;						///< the IP address of the camera we are connecting to
+	char camera_ip_address_[16];					///< the IP address of the camera we are connecting to
 	float camera_view_angle_;						///< the viewing angle of the camera, used in various calculations
 	int camera_resolution_;							///< the resolution of the images taken by the camera
 	int frames_per_second_;							///< the FPS of the camera
@@ -69,7 +83,9 @@ private:
 	int brightness_;								///< the brightness of hte images taken by the camera
 	int compression_;								///< the compression percentage of the images taken by the camera
 	int exposure_;									///< the exposure model of the camera
-	double angle_of_target_offset_;					///< the offset that should be added to the 'degrees off target' calculation due to physical error in the robot
+	double angle_of_target_horiztonal_offset_;		///< the offset that should be added to the 'horiztonal degrees off target' calculation due to physical error in the robot
+	double angle_of_target_vertical_offset_;		///< the offset that should be added to the 'vertical degrees' calculation due to physical error in the robot
+	double angle_of_target_distance_offset_;			///< the distance offset that should be added to the distance from target during vertical angle calculation
 	int threshold_type_;							///< the type of image color threshold filter being used
 	int threshold_plane_1_low_;						///< lower boundary for the RGB/HSL filter on plane 1
 	int threshold_plane_1_high_;					///< upper boundary for the RGB/HSL filter on plane 1
@@ -94,7 +110,7 @@ private:
 	bool sample_images_stored_;				///< true if 1 set of sample images have been stored
 	bool camera_initialized_;				///< true if the camera is initialized
 	bool log_enabled_;						///< true if logging is enabled
-	char *parameters_file_;					///< path and filename of the parameter file to read
+	char parameters_file_[25];				///< path and filename of the parameter file to read
 	ProgramState robot_state_;				///< current state of the robot obtained from the field
 };
 

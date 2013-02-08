@@ -135,9 +135,7 @@ bool UserInterface::LoadParameters() {
 	SafeDelete(controller_2_);
 	
 	// Attempt to read the parameters file
-	// FIXME
-	//parameters_ = new Parameters(parameters_file_);
-	parameters_ = new Parameters("userinterface.par");
+	parameters_ = new Parameters(parameters_file_);
 	if (parameters_ != NULL && parameters_->file_opened_) {
 		parameters_read = parameters_->ReadValues();
 		parameters_->Close();
