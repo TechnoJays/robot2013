@@ -60,6 +60,7 @@ Feeder::~Feeder() {
 	SafeDelete(parameters_);
     SafeDelete(pressure_switch_);
     SafeDelete(compressor_power_);
+    SafeDelete(piston_);
 }
 
 /**
@@ -75,12 +76,14 @@ void Feeder::Initialize(char * parameters, bool logging_enabled) {
 	feeder_enabled_ = false;
 	pressure_switch_enabled_ = false;
 	compressor_relay_enabled_ = false;
+	solenoid_enabled_ = false;
 
 	// Initialize private member objects
 	log_ = NULL;
 	parameters_ = NULL;
     pressure_switch_ = NULL;
     compressor_power_ = NULL;
+    piston_ = NULL;
 	
 	// Initialize private parameters
 
@@ -114,12 +117,14 @@ bool Feeder::LoadParameters() {
 	// Define and initialize local variables
 	int pressure_switch_channel = -1;
 	int compressor_relay_channel = -1;
+	int solenoid_channel = -1;
 	bool parameters_read = false;	// This should default to false
 	
 	// Close and delete old objects
 	SafeDelete(parameters_);
     SafeDelete(pressure_switch_);
     SafeDelete(compressor_power_);
+    SafeDelete(piston_);
 	
 	// Attempt to read the parameters file
 	parameters_ = new Parameters(parameters_file_);
@@ -139,6 +144,7 @@ bool Feeder::LoadParameters() {
 	if (parameters_read) {
 		parameters_->GetValue("PRESSURE_SWITCH_CHANNEL", &pressure_switch_channel);
 		parameters_->GetValue("COMPRESSOR_RELAY_CHANNEL", &compressor_relay_channel);
+		parameters_->GetValue("SOLENOID_CHANNEL", &solenoid_channel);
 	}
 	
 	// Check if the pressure switch is present/enabled
@@ -162,9 +168,20 @@ bool Feeder::LoadParameters() {
 	else {
 		compressor_relay_enabled_ = false;
 	}
+
+	// Check if the solenoid is present/enabled
+	if (solenoid_channel > 0) {
+		piston_ = new Solenoid(solenoid_channel);
+		if (piston_ != NULL) {
+			solenoid_enabled_ = true;
+		}
+	}
+	else {
+		solenoid_enabled_ = false;
+	}
 	
 	// Feeder is only enabled if everything is working
-	if (pressure_switch_enabled_ && compressor_relay_enabled_)
+	if (pressure_switch_enabled_ && compressor_relay_enabled_ && solenoid_enabled_)
 		feeder_enabled_ = true;
 	else
 		feeder_enabled_ = false;
@@ -181,6 +198,12 @@ bool Feeder::LoadParameters() {
 		}
 		else {
 			log_->WriteLine("Compressor relay disabled\n");
+		}
+		if (solenoid_enabled_) {
+			log_->WriteLine("Solenoid enabled\n");
+		}
+		else {
+			log_->WriteLine("Solenoid disabled\n");
 		}
 		if (feeder_enabled_) {
 			log_->WriteLine("Feeder enabled\n");
@@ -276,4 +299,16 @@ void Feeder::SetCompressor(bool state) {
 	else
 		relay_state = Relay::kOff;
 	compressor_power_->Set(relay_state);
+}
+
+/**
+ * \brief Set the solenoid/piston on/off.
+ *
+ * \param state true if the solenoid is active
+*/
+void Feeder::SetPiston(bool state) {
+	// Abort if feeder not available
+	if (!feeder_enabled_ || !solenoid_enabled_)
+		return;
+	piston_->Set(state);
 }

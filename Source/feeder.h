@@ -8,6 +8,7 @@ class DataLog;
 class DigitalInput;
 class Parameters;
 class Relay;
+class Solenoid;
 
 /**
  * \class Feeder
@@ -32,11 +33,13 @@ public:
 	void SetLogState(bool state);
     bool GetPressureSwitchState();
 	void SetCompressor(bool state);
+	void SetPiston(bool state);
 	
 	// Public member variables
 	bool feeder_enabled_;			///< true if the entire feeder system is present and initialized
 	bool pressure_switch_enabled_;	///< true if the pressure switch is present and initialized
 	bool compressor_relay_enabled_;	///< true if the compressor relay is present and initialized
+	bool solenoid_enabled_;			///< true if the solenoid is present and initialized
 
 private:
 	// Private methods
@@ -47,6 +50,7 @@ private:
 	DigitalInput *pressure_switch_; ///< pressure switch that detects when the compressor should be turned on/off
     Parameters *parameters_;	    ///< parameters object used to load feeder parameters from a file
 	Relay *compressor_power_;       ///< relay to turn the compressor on/off
+	Solenoid *piston_;				///< solenoid to control the feeder piston
     
 	// Private parameters
 
