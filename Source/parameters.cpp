@@ -82,7 +82,7 @@ bool Parameters::ReadValues() {
 	number_parameters_.clear();
 	string_parameters_.clear();
 	
-	if (file_ != NULL) {
+	if (file_opened_ && file_ != NULL) {
 		// Loop while there's data to read
 		while (fgets(buffer, 255, file_) != NULL) {
 			// Clear any previous values of the strings

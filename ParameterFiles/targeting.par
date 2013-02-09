@@ -7,7 +7,9 @@ WHITE_BALANCE = 5 # 0=kWhiteBalance_Automatic, kWhiteBalance_Hold, kWhiteBalance
 BRIGHTNESS = 50
 COMPRESSION = 30
 EXPOSURE = 1 # 0=kExposure_Automatic, 1=kExposure_Hold, kExposure_FlickerFree50Hz, kExposure_FlickerFree60Hz
-ANGLE_OF_TARGET_OFFSET = 0 # manual correction to add to angle of target calculations to compenstate for robot to camera difference
+ANGLE_OF_TARGET_HORIZONTAL_OFFSET = 0   # manual correction to add to horizontal angle of target calculations to compenstate for robot to camera difference
+ANGLE_OF_TARGET_VERTICAL_OFFSET = 0     # manual correction to add to vertical angle of target calculations to compenstate for robot to camera difference
+ANGLE_OF_TARGET_DISTANCE_OFFSET = 0     # manual correction to add to distance of target calculations to compenstate for robot to camera difference
 THRESHOLD_TYPE = 0 # 0=HSV, 1=HSL, 2=RGB
 THRESHOLD_PLANE_1_LOW = 60
 THRESHOLD_PLANE_1_HIGH = 100

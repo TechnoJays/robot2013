@@ -82,7 +82,7 @@ bool AutoScript::ReadScript() {
 	autoscript_commands.clear();
 	command_iterator = autoscript_commands.begin();
 	
-	if (file_ != NULL) {
+	if (file_opened_ && file_ != NULL) {
 		// Loop while there's data to read
 		while (fgets(buffer, 255, file_) != NULL) {
 			// Reset temporary variables

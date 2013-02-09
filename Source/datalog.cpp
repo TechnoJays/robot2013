@@ -113,7 +113,7 @@ void DataLog::Close() {
  * \param timestamp true if a timestamp should be prepended to the line.
 */
 void DataLog::WriteLine(const char * line, bool timestamp) {
-	if (file_ != NULL) {
+	if (file_opened_ && file_ != NULL) {
 		if (timestamp) {
 			UINT32 time = GetMsecTime();
 			fprintf(file_, "[%d] ", time);
@@ -133,7 +133,7 @@ void DataLog::WriteLine(const char * line, bool timestamp) {
  * \param timestamp true if a timestamp should be prepended to the line.
 */
 void DataLog::WriteValue(const char * parameter, const char * value, bool timestamp) {
-	if ((file_ != NULL) && (parameter != NULL) && (value != NULL)) {
+	if (file_opened_ && (file_ != NULL) && (parameter != NULL) && (value != NULL)) {
 		if (timestamp) {
 			UINT32 time = GetMsecTime();
 			fprintf(file_, "[%d] ", time);
@@ -151,7 +151,7 @@ void DataLog::WriteValue(const char * parameter, const char * value, bool timest
  * \param timestamp true if a timestamp should be prepended to the line.
 */
 void DataLog::WriteValue(const char * parameter, int value, bool timestamp) {
-	if ((file_ != NULL) && (parameter != NULL)) {
+	if (file_opened_ && (file_ != NULL) && (parameter != NULL)) {
 		if (timestamp) {
 			UINT32 time = GetMsecTime();
 			fprintf(file_, "[%d] ", time);
@@ -169,7 +169,7 @@ void DataLog::WriteValue(const char * parameter, int value, bool timestamp) {
  * \param timestamp true if a timestamp should be prepended to the line.
 */
 void DataLog::WriteValue(const char * parameter, float value, bool timestamp) {
-	if ((file_ != NULL) && (parameter != NULL)) {
+	if (file_opened_ && (file_ != NULL) && (parameter != NULL)) {
 		if (timestamp) {
 			UINT32 time = GetMsecTime();
 			fprintf(file_, "[%d] ", time);
@@ -187,7 +187,7 @@ void DataLog::WriteValue(const char * parameter, float value, bool timestamp) {
  * \param timestamp true if a timestamp should be prepended to the line.
 */
 void DataLog::WriteValue(const char * parameter, double value, bool timestamp) {
-	if ((file_ != NULL) && (parameter != NULL)) {
+	if (file_opened_ && (file_ != NULL) && (parameter != NULL)) {
 		if (timestamp) {
 			UINT32 time = GetMsecTime();
 			fprintf(file_, "[%d] ", time);

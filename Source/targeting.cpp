@@ -211,8 +211,8 @@ bool Targeting::LoadParameters() {
 		parameters_->GetValue("THRESHOLD_PLANE_2_HIGH", &threshold_plane_2_high_);
 		parameters_->GetValue("THRESHOLD_PLANE_3_LOW", &threshold_plane_3_low_);
 		parameters_->GetValue("THRESHOLD_PLANE_3_HIGH", &threshold_plane_3_high_);
-		parameters_->GetValue("PARTICLE_FILTER_WIDTH_MINIMUM", &particle_filter_filled_minimum_);
-		parameters_->GetValue("PARTICLE_FILTER_WIDTH_MAXIMUM", &particle_filter_filled_maximum_);
+		parameters_->GetValue("PARTICLE_FILTER_FILLED_MINIMUM", &particle_filter_filled_minimum_);
+		parameters_->GetValue("PARTICLE_FILTER_FILLED_MAXIMUM", &particle_filter_filled_maximum_);
 		parameters_->GetValue("TARGET_RECTANGLE_RATIO_MINIMUM",&target_rectangle_ratio_minimum_);
 		parameters_->GetValue("TARGET_RECTANGLE_RATIO_MAXIMUM",&target_rectangle_ratio_maximum_);
 		parameters_->GetValue("TARGET_RECTANGLE_RATIO_THRESHOLD",&target_rectangle_ratio_threshold_);
@@ -437,7 +437,7 @@ bool Targeting::GetTargets(vector<ParticleAnalysisReport> &report) {
  * \brief Sets the camera settings using the values from the parameter file.
 */
 void Targeting::InitializeCamera() {
-	if (!camera_initialized_) {
+	if (camera_enabled_ && !camera_initialized_) {
 		// FIXME
 		//AxisCamera &axis_camera = AxisCamera::GetInstance("10.0.94.11");
 		//AxisCamera &axis_camera = AxisCamera::GetInstance(); // this worked before
@@ -493,6 +493,9 @@ void Targeting::InitializeCamera() {
  * \return true if successful.
 */
 bool Targeting::StartSearching() {
+	if (!camera_enabled_)
+		return false;
+	
 	if (!camera_initialized_) {
 		InitializeCamera();
 	}
@@ -520,6 +523,9 @@ bool Targeting::StartSearching() {
  * \return true if successful.
 */
 bool Targeting::StopSearching() {
+	if (!camera_enabled_)
+			return false;
+	
 	if (find_targets_task_.Verify()) {
 		return find_targets_task_.Stop();
 	}
