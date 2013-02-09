@@ -55,6 +55,7 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	shooter_ = NULL;
 	targeting_ = NULL;
 	timer_ = NULL;
+	auto_shoot_timer_ = NULL;
 	user_interface_ = NULL;
 	current_target_ = ParticleAnalysisReport();
 	current_target_.imageHeight = 0;
@@ -63,6 +64,8 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	// Initialize private parameters
 	camera_boot_time_ = 30.0;
 	initial_target_search_time_ = 1.5;
+	auto_shooter_spinup_time_ = 1.5;
+	auto_shooter_spindown_time_ = 0.5;
 
 	// Initialize private member variables
 	log_enabled_ = false;
@@ -86,6 +89,7 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 
 	// Create timer objects
 	timer_ = new Timer();
+	auto_shoot_timer_ = new Timer();
 
 	// Attempt to read the parameters file
 	strncpy(parameters_file_, parameters, sizeof(parameters_file_));
@@ -132,6 +136,8 @@ bool TechnoJays::LoadParameters() {
 		parameters_->GetValue("PERIOD", &period);
 		parameters_->GetValue("CAMERA_BOOT_TIME", &camera_boot_time_);
 		parameters_->GetValue("INITIAL_TARGET_SEARCH_TIME", &initial_target_search_time_);
+		parameters_->GetValue("AUTO_SHOOTER_SPINUP_TIME", &auto_shooter_spinup_time_);
+		parameters_->GetValue("AUTO_SHOOTER_SPINDOWN_TIME", &auto_shooter_spindown_time_);
 	}
 
 	// Set the rate for the periodic methods
@@ -450,15 +456,15 @@ void TechnoJays::AutonomousContinuous() {
 						current_command_complete_ = true;
 				}
 			}
-			else if (strncmp(current_command_.command, "shoottime", 255) == 0) {
-				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+			else if (strncmp(current_command_.command, "shoot", 255) == 0) {
+				if (current_command_.param1 == -9999)
 					current_command_complete_ = true;
 				else {
 					if (!current_command_in_progress_) {
-						shooter_->ResetAndStartTimer();
+						auto_shoot_state_ = kStep1;
 						current_command_in_progress_ = true;
 					}
-					if (shooter_->Shoot((double) current_command_.param1, (int) current_command_.param2))
+					if (AutoShoot((int) current_command_.param1))
 						current_command_complete_ = true;
 				}
 			}
@@ -750,6 +756,74 @@ void TechnoJays::TeleopPeriodic() {
 		user_interface_->StoreButtonStates(UserInterface::kDriver);
 		user_interface_->StoreButtonStates(UserInterface::kScoring);
 	}
+}
+
+bool TechnoJays::AutoShoot(int power) {
+	// Abort if we don't have what we need
+	if (feeder_ == NULL || shooter_ == NULL || !feeder_->feeder_enabled_ || !shooter_->shooter_enabled_) {
+		auto_shoot_state_ = kFinished;
+		return true;
+	}
+	
+	double time_left = 0.0;
+	// Get the timer value since the last event
+	double elapsed_time = auto_shoot_timer_->Get();
+
+	// Spin up the shooter and keep it moving until we're done (regardless of what step)
+	shooter_->Shoot(power);
+	
+	switch (auto_shoot_state_) {
+	// Keep track of how long we've spun up the shooter
+	case kStep1:
+		auto_shoot_timer_->Stop();
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		elapsed_time = 0.0;
+		auto_shoot_state_ = kStep2;
+		// Fall through into kStep2
+	// Pre-delay for the shooter to spinup
+	case kStep2:
+		// Calculate time left
+		time_left = auto_shooter_spinup_time_ - elapsed_time;
+		// If enough time has passed, feed a disc
+		if (time_left <= 0.0) {
+			auto_shoot_state_ = kStep3;
+			auto_shoot_timer_->Stop();
+			// Fall through to kStep3
+		} else {
+			break;
+		}
+	// Feed a disc into the shooter
+	case kStep3:
+		feeder_->SetPiston(true);
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		auto_shoot_state_ = kStep4;
+		// Fall through to kStep4
+	// Post-delay for the shooter to finish shooting
+	case kStep4:
+		// Calculate time left
+		time_left = auto_shooter_spindown_time_ - elapsed_time;
+		// If enough time has passed, we're done
+		if (time_left <= 0.0) {
+			auto_shoot_timer_->Stop();
+			auto_shoot_timer_->Reset();
+			// Retract feeder
+			feeder_->SetPiston(false);
+			// Stop spinning the shooter motor
+			shooter_->Shoot(0);
+			auto_shoot_state_ = kFinished;
+			return true;
+		} else {
+			break;
+		}
+	default:
+		shooter_->Shoot(0);
+		auto_shoot_state_ = kFinished;
+		return true;
+	}
+
+	return false;
 }
 
 START_ROBOT_CLASS(TechnoJays);

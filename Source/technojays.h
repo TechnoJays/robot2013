@@ -39,11 +39,27 @@ public:
 	void TeleopInit();
 	void TeleopContinuous();
 	void TeleopPeriodic();
+	bool AutoShoot(int power);
 
 	// Public member variables
 	vector<ParticleAnalysisReport> targets_report_;	///< particle reports of matching hoop targets
 	
 private:
+	// Private enums
+	enum AutoState {
+		kStep1,
+		kStep2,
+		kStep3,
+		kStep4,
+		kStep5,
+		kStep6,
+		kStep7,
+		kStep8,
+		kStep9,
+		kStep10,
+		kFinished
+	};
+	
 	// Private methods
 	void Initialize(const char * parameters, bool logging_enabled);
 	
@@ -58,11 +74,14 @@ private:
 	Targeting *targeting_;					///< finds and reports details about targets
 	UserInterface *user_interface_;			///< gets input from the controllers and sends messages back to the DriverStation
 	ParticleAnalysisReport current_target_;	///< contains information about the currently selected target from the camera
-	Timer *timer_;							///< timer object used for timed functions
+	Timer *timer_;							///< timer object used for misc timed functions
+	Timer *auto_shoot_timer_;				///< timer object used for AutoShoot function
 	
 	// Private parameters
-	double camera_boot_time_;									///< the amount of time required for the Axis camera to bootup
-	double initial_target_search_time_;							///< the amount of time required for the Targeting module to search for targets
+	double camera_boot_time_;				///< the amount of time required for the Axis camera to bootup
+	double initial_target_search_time_;		///< the amount of time required for the Targeting module to search for targets
+	float auto_shooter_spinup_time_;		///< the amount of time to spin up the shooter before feeding a disc	
+	float auto_shooter_spindown_time_;		///< the amount of time to spin down the shooter after feeding a disc
 	
 	// Private member variables
 	bool driver_turbo_;							///< true if the driver controller is requesting turbo mode
@@ -76,7 +95,7 @@ private:
 	bool current_command_complete_;				///< true when an autonomous command finishes and the next should be executed
 	bool current_command_in_progress_;			///< true when an autonomous command has already started
 	autoscript_command current_command_;		///< the current autonomous command being executed
-
+	AutoState auto_shoot_state_;				///< the current state of the AutoShoot autonomous function
 };
 
 #endif
