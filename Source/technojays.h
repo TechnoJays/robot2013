@@ -6,6 +6,8 @@
 #include <string.h>
 #include <vector>
 #include "autoscript.h"
+#include "targeting.h"
+
 
 // Forward class definitions
 class AutoScript;
@@ -61,7 +63,13 @@ private:
 	};
 	
 	// Private methods
+	bool AimAtTarget();
+	bool AutoFindTarget(Targeting::TargetHeight height);
+	void GetTargets();
 	void Initialize(const char * parameters, bool logging_enabled);
+	void NextTarget();
+	void PrintTargetInfo();
+	void SelectTarget(Targeting::TargetHeight height);
 	
 	// Private member objects
 	AutoScript *autoscript_;				///< autoscript object used to load autonomous script from a file
@@ -89,13 +97,19 @@ private:
 	bool detailed_logging_enabled_;				///< true if detailed robot and driver details should be logged
 	bool log_enabled_;							///< true if logging is enabled
 	char parameters_file_[25];					///< path and filename of the parameter file to read
+	char output_buffer_[22];					///< character buffer for outputting messages to the driver station LCD
 	std::string autoscript_file_name_;			///< file name of the selected autoscript file for autonomous mode
 	unsigned int autoscript_files_counter_;		///< counter of the current file selected in the autoscript_files_ vector
 	std::vector<std::string> autoscript_files_;	///< vector of autoscript file names from the file system
 	bool current_command_complete_;				///< true when an autonomous command finishes and the next should be executed
 	bool current_command_in_progress_;			///< true when an autonomous command has already started
 	autoscript_command current_command_;		///< the current autonomous command being executed
+	float target_report_heading_;				///< the heading of the robot when the target report was generated
+	double degrees_off_center_;					///< the number of degrees the robot is off from facing the selected target
+	unsigned current_target_vector_location_;	///< the index in the particle report vector of the current target, used when cycling through targets
 	AutoState auto_shoot_state_;				///< the current state of the AutoShoot autonomous function
+	AutoState aim_state_;						///< the current state of the AimAtTarget function
+	AutoState auto_find_target_state_;			///< the current state of the AutoFindTarget function
 };
 
 #endif

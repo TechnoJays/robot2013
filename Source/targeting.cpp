@@ -539,14 +539,27 @@ bool Targeting::StopSearching() {
  *
  * Used to sort targets based on their height.
  *
+ * (int t1,int t2) { return (t1<t2)
+ * 0,5	1
+ * 5,0	0
+ * 5,5	0
+ *
+ * 0,5	1
+ * 5,0	-1
+ * 5,5	0
+ *
  * \param t1 the first Target.
  * \param t2 the second Target.
  * \return (1, 0, or -1) for the heights of t1 > t2, t1 == t2, and t1 < t2.
 */
 int Targeting::CompareTargets(ParticleAnalysisReport t1, ParticleAnalysisReport t2)
 {
-	if (t1.center_mass_y < t2.center_mass_y) return 1;
-	if (t1.center_mass_y > t2.center_mass_y) return -1;
+	// Ascending order
+	if (t1.center_mass_y > t2.center_mass_y) return 1;
+	if (t1.center_mass_y < t2.center_mass_y) return -1;
+	// Descending order, e.g., 5,4,3,2,1
+	/*if (t1.center_mass_y < t2.center_mass_y) return 1;
+	if (t1.center_mass_y > t2.center_mass_y) return -1;*/
 	return 0;
 }
 

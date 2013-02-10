@@ -490,9 +490,18 @@ void TechnoJays::AutonomousContinuous() {
 				}
 			}
 			// Targeting
-			// TODO
-			// Feeder
-			// TODO
+			else if (strncmp(current_command_.command, "findtarget", 255) == 0) {
+				if (current_command_.param1 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (!current_command_in_progress_) {
+						auto_find_target_state_ = kStep1;
+						current_command_in_progress_ = true;
+					}
+					if (AutoFindTarget((Targeting::TargetHeight) current_command_.param1))
+						current_command_complete_ = true;
+				}
+			}
 			// Catchall
 			else {
 				current_command_complete_ = true;
@@ -716,26 +725,26 @@ void TechnoJays::TeleopPeriodic() {
 				&& user_interface_->ButtonStateChanged(UserInterface::kDriver, UserInterface::kBack)) {
 			// Print title
 			user_interface_->OutputUserMessage("Diagnostics", true);
-			char output_buffer[22] = { 0 };
+			memset(output_buffer_, 0, sizeof(output_buffer_));
 			if (drive_train_ != NULL) {
 				drive_train_->LogCurrentState();
-				drive_train_->GetCurrentState(output_buffer);
-				user_interface_->OutputUserMessage(output_buffer, false);
+				drive_train_->GetCurrentState(output_buffer_);
+				user_interface_->OutputUserMessage(output_buffer_, false);
 			}
 			if (shooter_ != NULL) {
 				shooter_->LogCurrentState();
-				shooter_->GetCurrentState(output_buffer);
-				user_interface_->OutputUserMessage(output_buffer, false);
+				shooter_->GetCurrentState(output_buffer_);
+				user_interface_->OutputUserMessage(output_buffer_, false);
 			}
 			if (climber_ != NULL) {
 				climber_->LogCurrentState();
-				climber_->GetCurrentState(output_buffer);
-				user_interface_->OutputUserMessage(output_buffer, false);
+				climber_->GetCurrentState(output_buffer_);
+				user_interface_->OutputUserMessage(output_buffer_, false);
 			}
 			if (feeder_ != NULL) {
 				feeder_->LogCurrentState();
-				feeder_->GetCurrentState(output_buffer);
-				user_interface_->OutputUserMessage(output_buffer, false);
+				feeder_->GetCurrentState(output_buffer_);
+				user_interface_->OutputUserMessage(output_buffer_, false);
 			}
 		}
 		
@@ -758,6 +767,201 @@ void TechnoJays::TeleopPeriodic() {
 	}
 }
 
+void TechnoJays::PrintTargetInfo() {
+	// Print target info
+	if (user_interface_ != NULL && targeting_ != NULL) {
+		memset(output_buffer_, 0, sizeof(output_buffer_));
+		Targeting::TargetHeight target_height = targeting_->GetEnumHeightOfTarget(&current_target_);
+		switch(target_height) {
+		case Targeting::kHigh:
+			sprintf(output_buffer_, "Height: High");
+			break;
+		case Targeting::kMedium:
+			sprintf(output_buffer_, "Height: Medium");
+			break;
+		case Targeting::kLow:
+			sprintf(output_buffer_, "Height: Low");
+			break;
+		default:
+			sprintf(output_buffer_, "Height: Unknown");
+			break;			
+		}
+		user_interface_->OutputUserMessage(output_buffer_, true);
+		sprintf(output_buffer_, "Distance: %4.2f", (float) targeting_->GetCameraDistanceToTarget(&current_target_));			
+		user_interface_->OutputUserMessage(output_buffer_, false);
+		sprintf(output_buffer_, "H-Angle: %4.2f", (float) targeting_->GetHorizontalAngleOfTarget(&current_target_));			
+		user_interface_->OutputUserMessage(output_buffer_, false);
+		sprintf(output_buffer_, "V-Angle: %4.2f", (float) targeting_->GetVerticalAngleOfTarget(&current_target_));			
+		user_interface_->OutputUserMessage(output_buffer_, false);
+	}
+}
+
+/**
+ * \brief Steers the robot to face a target.
+*/
+bool TechnoJays::AimAtTarget() {
+	// Abort if we don't have what we need
+	if ((current_target_.imageWidth == 0 && current_target_.imageHeight == 0) || drive_train_ == NULL) {
+		aim_state_ = kFinished;
+		return true;
+	}
+
+	switch (aim_state_) {
+	// Calculate heading adjustment
+	case kStep1:
+		degrees_off_center_ = targeting_->GetHorizontalAngleOfTarget(&current_target_);
+		// Fall through to step 2
+		aim_state_ = kStep2;
+	// Adjust heading until aimed at target
+	case kStep2:
+		if (drive_train_->AdjustHeading(degrees_off_center_, 1.0)) {
+		//if (drive_train_->Turn((target_report_heading_+degrees_off_center_), 1.0)) {
+			aim_state_ = kFinished;
+			return true;
+		} else {
+			break;
+		}
+	default:
+		aim_state_ = kFinished;
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * \brief Get a list of targets from the targeting module.
+ *
+ * This stores a copy of the target list locally, since the targeting
+ * module continues searching.
+*/
+void TechnoJays::GetTargets() {
+	// Abort if we don't have what we need
+	if (targeting_ == NULL || !targeting_->camera_enabled_)
+		return;
+
+	// Erase old data
+	if (!targets_report_.empty())
+		targets_report_.clear();
+		
+	// Reset drive train sensors
+	if (drive_train_ != NULL)
+		drive_train_->ResetSensors();
+	target_report_heading_ = 0.0;
+
+	// Create a new empty target report
+	current_target_ = ParticleAnalysisReport();
+	current_target_.imageHeight = 0;
+	current_target_.imageWidth = 0;
+	
+	// Search for targets
+	if (!targeting_->GetTargets(targets_report_))
+		return;
+
+	// Store current robot heading
+	if (drive_train_ != NULL)
+		target_report_heading_ = drive_train_->GetHeading();	
+}
+
+/**
+ * \brief Selects the next target in the list of potential targets.
+*/
+void TechnoJays::NextTarget() {
+	// Only cycle if we have more than 1 target
+	if (targets_report_.size() > 1) {
+		// Increment/cycle the target counter
+		if ((current_target_vector_location_ + 1) >= targets_report_.size()) {
+			current_target_vector_location_ = 0;
+		} else {
+			current_target_vector_location_++;
+		}
+
+		// Get the target report from the report of all targets
+		ParticleAnalysisReport target = (targets_report_.at(
+				current_target_vector_location_));
+
+		// Copy the pointer to our class variable
+		current_target_ = target;
+
+		PrintTargetInfo();
+	}
+}
+
+/**
+ * \brief Select a target from the target list that is nearest the specified height.
+ *
+ * \param height the preferred target height to select out of the targets that were found.
+*/
+void TechnoJays::SelectTarget(Targeting::TargetHeight height) {
+	// Abort if no targets found
+	if (targets_report_.size() == 0)
+		return;
+	
+	// Local target variables during search
+	ParticleAnalysisReport target;
+	Targeting::TargetHeight current_height = Targeting::kUnknown;
+	
+	// Loop through all detected targets
+	for (unsigned i = 0; i < targets_report_.size(); i++) {
+		// Get the current target and height
+		target = (targets_report_.at(i));
+		current_height = targeting_->GetEnumHeightOfTarget(&target);
+		// If it matches, store the current target and return
+		if (current_height == height) {
+			current_target_ = target;
+			current_target_vector_location_ = i;
+			return;
+		}
+	}
+	
+	// If the expected was the low height and nothing found, choose lowest target found
+	if (height == Targeting::kLow) {
+		target = (targets_report_.at(0));
+		current_target_vector_location_ = 0;
+	}
+	// Otherwise choose the highest target found
+	else {
+		current_target_vector_location_ = targets_report_.size() - 1;
+		target = (targets_report_.at(current_target_vector_location_));
+	}
+}
+
+/**
+ * \brief Automatically finds a target of the specified height and aims the robot at it.
+ *
+ * \param height the preferred target height to select out of the targets that were found.
+ * \return true when the operation is complete.
+*/
+bool TechnoJays::AutoFindTarget(Targeting::TargetHeight height) {
+	switch (auto_find_target_state_) {
+	// Get the target list and select the specified target
+	case kStep1:
+		GetTargets();
+		SelectTarget(height);
+		auto_find_target_state_ = kStep2;
+		break;
+	// Aim at the selected target
+	case kStep2:
+		if (AimAtTarget()) {
+			auto_find_target_state_ = kFinished;
+			return true;
+		} else {
+			break;
+		}
+	default:
+		auto_find_target_state_ = kFinished;
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * \brief Automatically spins up the shooter and feeds a disc.
+ *
+ * \param power the amount of power as a percentage to shoot with.
+ * \return true when the operation is complete.
+*/
 bool TechnoJays::AutoShoot(int power) {
 	// Abort if we don't have what we need
 	if (feeder_ == NULL || shooter_ == NULL || !feeder_->feeder_enabled_ || !shooter_->shooter_enabled_) {
