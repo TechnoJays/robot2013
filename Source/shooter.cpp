@@ -1,3 +1,4 @@
+#include <math.h>
 #include "WPILib.h"
 #include "shooter.h"
 #include "datalog.h"
@@ -208,6 +209,8 @@ bool Shooter::LoadParameters() {
 		parameters_->GetValue("SHOOT_BACKWARD_DIRECTION", &shoot_backward_direction_);
 		parameters_->GetValue("SHOOTER_MIN_POWER_SPEED", &shooter_min_power_speed_);
 		parameters_->GetValue("SHOOTER_POWER_ADJUSTMENT_RATIO", &shooter_power_adjustment_ratio_);
+		parameters_->GetValue("ANGLE_LINEAR_FIT_GRADIENT", &angle_linear_fit_gradient_);
+		parameters_->GetValue("ANGLE_LINEAR_FIT_CONSTANT", &angle_linear_fit_constant_);
 	}
 
 	// Check if the encoder is present/enabled
@@ -497,6 +500,75 @@ bool Shooter::SetPitch(double time, Direction direction, float speed) {
 		}
 		
 		pitch_controller_->Set(directional_speed, 0);
+		return false;
+	}
+}
+
+/**
+ * \brief Sets the shooter pitch to an angle provided by the argument.
+ *
+ * \param angle desired angle in degrees.
+ * \param speed motor speed ratio.
+ * \return true when the desired angle is reached.
+*/
+bool Shooter::SetPitchAngle(float angle, float speed) {
+	// Abort if the pitch control or encoder are not available
+	if (!encoder_enabled_ || !pitch_enabled_)
+		return true;
+
+	// Movement direction/speed
+	float movement_direction = 0.0;
+	
+	// Convert angle to encoder position
+	int encoder_count = (int) floor((angle_linear_fit_gradient_ * angle) + angle_linear_fit_constant_);
+	
+	// Check the encoder position against the boundaries if boundaries enabled
+	// Check Max limit
+	if (encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
+		if (encoder_count_ > encoder_max_limit_) {
+			return true;
+		}
+	}
+	// Check Min limit
+	if (encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
+		if (encoder_count_ < encoder_min_limit_) {
+			return true;
+		}
+	}
+
+	// Check to see if we've reached the proper height
+	if (abs(encoder_count - encoder_count_) <= encoder_threshold_) {
+		pitch_controller_->Set(0, 0);
+		return true;
+	}
+	// Continue moving
+	else {
+		// Calculate the direction needed to move, and turn into a speed
+		if ((encoder_count - encoder_count_) > 0) {
+			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
+				movement_direction = pitch_up_direction_ * speed * auto_far_speed_ratio_;
+			}
+			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
+				movement_direction = pitch_up_direction_ * speed * auto_medium_speed_ratio_;
+			}
+			else {
+				movement_direction = pitch_up_direction_ * speed * auto_near_speed_ratio_;
+			}
+		}
+		else {
+			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
+				movement_direction = pitch_down_direction_ * speed * auto_far_speed_ratio_;
+			}
+			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
+				movement_direction = pitch_down_direction_ * speed * auto_medium_speed_ratio_;
+			}
+			else {
+				movement_direction = pitch_down_direction_ * speed * auto_near_speed_ratio_;
+			}
+		}
+		
+		// Move
+		pitch_controller_->Set(movement_direction, 0);
 		return false;
 	}
 }

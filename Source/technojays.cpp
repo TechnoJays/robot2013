@@ -66,12 +66,25 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	initial_target_search_time_ = 1.5;
 	auto_shooter_spinup_time_ = 1.5;
 	auto_shooter_spindown_time_ = 0.5;
+	auto_feeder_height_angle_ = 50.0;
 
 	// Initialize private member variables
 	log_enabled_ = false;
 	detailed_logging_enabled_ = false;
 	driver_turbo_ = false;
 	scoring_turbo_ = false;
+	current_command_complete_ = false;
+	current_command_in_progress_ = false;
+	previous_scoring_dpad_y_ = 0.0;
+	target_report_heading_ = 0.0;
+	degrees_off_ = 0.0;
+	current_target_vector_location_ = 0;
+	auto_shoot_state_ = kFinished;
+	aim_state_ = kFinished;
+	auto_find_target_state_ = kFinished;
+	auto_rapid_fire_state_ = kFinished;
+	auto_cycle_target_state_ = kFinished;
+	auto_feeder_height_state_ = kFinished;
 	
 	// Disable the watchdog timer
 	// Set this right away before we do anything else
@@ -138,6 +151,7 @@ bool TechnoJays::LoadParameters() {
 		parameters_->GetValue("INITIAL_TARGET_SEARCH_TIME", &initial_target_search_time_);
 		parameters_->GetValue("AUTO_SHOOTER_SPINUP_TIME", &auto_shooter_spinup_time_);
 		parameters_->GetValue("AUTO_SHOOTER_SPINDOWN_TIME", &auto_shooter_spindown_time_);
+		parameters_->GetValue("AUTO_FEEDER_HEIGHT_ANGLE", &auto_feeder_height_angle_);
 	}
 
 	// Set the rate for the periodic methods
@@ -456,6 +470,14 @@ void TechnoJays::AutonomousContinuous() {
 						current_command_complete_ = true;
 				}
 			}
+			else if (strncmp(current_command_.command, "pitchangle", 255) == 0) {
+				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
+					current_command_complete_ = true;
+				else {
+					if (shooter_->SetPitchAngle(current_command_.param1, current_command_.param2))
+						current_command_complete_ = true;
+				}
+			}
 			else if (strncmp(current_command_.command, "shoot", 255) == 0) {
 				if (current_command_.param1 == -9999)
 					current_command_complete_ = true;
@@ -620,6 +642,42 @@ void TechnoJays::TeleopContinuous() {
 		if (feeder_ != NULL)
 			feeder_->LogCurrentState();
 	}
+	
+	// Perform any TeleOp Autonomous routines
+	if (auto_rapid_fire_state_ != kFinished) {
+		if (AutoRapidFire())
+			auto_rapid_fire_state_ = kFinished;
+	}
+	if (auto_shoot_state_ != kFinished) {
+		if (AutoShoot(100))
+			auto_shoot_state_ = kFinished;
+	}
+	if (auto_find_target_state_ != kFinished) {
+		if (AutoFindTarget(Targeting::kHigh))
+			auto_find_target_state_ = kFinished;
+	}
+	if (auto_cycle_target_state_ != kFinished) {
+		// Choose the next target
+		if (auto_cycle_target_state_ == kStep1) {
+			NextTarget();
+			auto_cycle_target_state_ = kStep2;
+			aim_state_ = kStep1;
+		}
+		// Aim at the target
+		else if (auto_cycle_target_state_ == kStep2) {
+			// Auto Aim at the target
+			if (AimAtTarget()) {
+				auto_cycle_target_state_ = kFinished;
+				aim_state_ = kFinished;
+			}
+		} else {
+			auto_cycle_target_state_ = kFinished;
+		}
+	}
+	if (auto_feeder_height_state_ != kFinished) {
+		if (AutoFeederHeight())
+			auto_feeder_height_state_ = kFinished;
+	}
 }
 
 /**
@@ -639,12 +697,14 @@ void TechnoJays::TeleopPeriodic() {
 		float driver_right_x = 0.0;
 		float scoring_left_y = 0.0;
 		float scoring_right_y = 0.0;
+		float scoring_dpad_y = 0.0;
 
 		// Get the values for the thumbsticks and dpads
 		driver_left_y = user_interface_->GetAxisValue(UserInterface::kDriver, UserInterface::kLeftY);
 		driver_right_x = user_interface_->GetAxisValue(UserInterface::kDriver, UserInterface::kRightX);
 		scoring_left_y = user_interface_->GetAxisValue(UserInterface::kScoring, UserInterface::kLeftY);
 		scoring_right_y = user_interface_->GetAxisValue(UserInterface::kScoring, UserInterface::kRightY);
+		scoring_dpad_y = user_interface_->GetAxisValue(UserInterface::kScoring, UserInterface::kDpadY);
 
 		// Log analog controls if detailed logging is enabled
 		if (detailed_logging_enabled_) {
@@ -673,48 +733,122 @@ void TechnoJays::TeleopPeriodic() {
 		} else {
 			scoring_turbo_ = false;
 		}
-
+		
+		// Check if a TeleOp Auto routine is requested
+		// AutoShoot
+		if (user_interface_->GetButtonState(UserInterface::kScoring, UserInterface::kRightTrigger) == 1
+				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kRightTrigger)) {
+			auto_rapid_fire_state_ = kFinished;
+			auto_shoot_state_ = kStep1;
+		}
+		// Rapid Fire
+		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kX) == 1
+				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kX)) {
+			auto_shoot_state_ = kFinished;
+			auto_rapid_fire_state_ = kStep1;
+		}
+		// Find Targets
+		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kB) == 1 
+				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kB)) {
+			auto_cycle_target_state_ = kFinished;
+			auto_feeder_height_state_ = kFinished;
+			auto_find_target_state_ = kStep1;
+		}
+		// Next Target
+		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kY) == 1 
+				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kY)) {
+			auto_find_target_state_ = kFinished;
+			auto_feeder_height_state_ = kFinished;
+			auto_cycle_target_state_ = kStep1;
+		}
+		// Auto Feed Height
+		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kA) == 1 
+				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kA)) {
+			auto_find_target_state_ = kFinished;
+			auto_cycle_target_state_ = kFinished;
+			auto_feeder_height_state_ = kStep1;
+		}
+		
 		// Manually control the robot
 		// Abort any current or currently requested autonomous routines when manual controls are used.
 		// When there isn't any user input and no autonomous routines are running, we still have to
 		//   set the motors to not moving.
 		// The motors need to be controlled each loop iteration, or else we get motor safety errors.
+		
 		// Climber
 		if (scoring_right_y != 0.0) {
+			// Even though these don't use the winch directly, they use the pitch
+			// so we don't want them running if the winch is moving.
+			auto_feeder_height_state_ = kFinished;
+			auto_find_target_state_ = kFinished;
+			auto_cycle_target_state_ = kFinished;
 			if (climber_ != NULL) {
 				climber_->Move(scoring_right_y, scoring_turbo_);
 			}
-		} else if (true) {
+		}
+		else if (true) {
+			// Don't put the auto programs above for this one since they're not directly using the winch/climber
+			// If we did, the climber/winch motor wouldn't get set to 0 while they ran and we'd get safety errors
 			if (climber_ != NULL) {
 				climber_->Move(0.0, false);
 			}
 		}
+		
 		// Shooter
 		if (scoring_left_y != 0.0) {
+			auto_find_target_state_ = kFinished;
+			auto_cycle_target_state_ = kFinished;
+			auto_feeder_height_state_ = kFinished;
 			if (shooter_ != NULL) {
 				shooter_->MovePitch(scoring_left_y, scoring_turbo_);
 			}
-		} else if (true) {
+		}
+		else if (auto_find_target_state_ == kFinished
+				&& auto_cycle_target_state_ == kFinished
+				&& auto_feeder_height_state_ == kFinished) {
 			if (shooter_ != NULL) {
 				shooter_->MovePitch(0.0, false);
 			}
 		}
-		if (user_interface_->GetButtonState(UserInterface::kScoring,
-				UserInterface::kLeftTrigger) == 1) {
+		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kLeftTrigger) == 1) {
+			auto_shoot_state_ = kFinished;
+			auto_rapid_fire_state_ = kFinished;
 			if (shooter_ != NULL) {
 				shooter_->Shoot(100);
 			}
-		} else if (true) {
+		}
+		else if (auto_shoot_state_ == kFinished
+				&& auto_rapid_fire_state_ == kFinished) {
 			if (shooter_ != NULL) {
 				shooter_->Shoot(0);
 			}
 		}
+		
+		// Feeder
+		if (scoring_dpad_y != 0.0 && previous_scoring_dpad_y_ != scoring_dpad_y) {
+			auto_shoot_state_ = kFinished;
+			auto_rapid_fire_state_ = kFinished;
+			if (feeder_ != NULL) {
+				feeder_->SetPiston(true);
+			}
+		}
+		else if (auto_shoot_state_ == kFinished
+				&& auto_rapid_fire_state_ == kFinished) {
+			if (feeder_ != NULL) {
+				feeder_->SetPiston(false);
+			}
+		}
+
 		// DriveTrain
 		if (driver_left_y != 0.0 || driver_right_x != 0.0) {
+			auto_find_target_state_ = kFinished;
+			auto_cycle_target_state_ = kFinished;
 			if (drive_train_ != NULL) {
 				drive_train_->Drive(driver_left_y, driver_right_x, driver_turbo_);
 			}
-		} else if (true) {
+		}
+		else if (auto_find_target_state_ == kFinished
+				&& auto_cycle_target_state_ == kFinished) {
 			if (drive_train_ != NULL) {
 				drive_train_->Drive(0.0, 0.0, false);
 			}
@@ -772,20 +906,8 @@ void TechnoJays::PrintTargetInfo() {
 	if (user_interface_ != NULL && targeting_ != NULL) {
 		memset(output_buffer_, 0, sizeof(output_buffer_));
 		Targeting::TargetHeight target_height = targeting_->GetEnumHeightOfTarget(&current_target_);
-		switch(target_height) {
-		case Targeting::kHigh:
-			sprintf(output_buffer_, "Height: High");
-			break;
-		case Targeting::kMedium:
-			sprintf(output_buffer_, "Height: Medium");
-			break;
-		case Targeting::kLow:
-			sprintf(output_buffer_, "Height: Low");
-			break;
-		default:
-			sprintf(output_buffer_, "Height: Unknown");
-			break;			
-		}
+		sprintf(output_buffer_, "Height: ");
+		targeting_->GetStringHeightOfTarget(target_height, output_buffer_+8);
 		user_interface_->OutputUserMessage(output_buffer_, true);
 		sprintf(output_buffer_, "Distance: %4.2f", (float) targeting_->GetCameraDistanceToTarget(&current_target_));			
 		user_interface_->OutputUserMessage(output_buffer_, false);
@@ -801,21 +923,30 @@ void TechnoJays::PrintTargetInfo() {
 */
 bool TechnoJays::AimAtTarget() {
 	// Abort if we don't have what we need
-	if ((current_target_.imageWidth == 0 && current_target_.imageHeight == 0) || drive_train_ == NULL) {
+	if ((current_target_.imageWidth == 0 && current_target_.imageHeight == 0) || drive_train_ == NULL || shooter_ == NULL) {
 		aim_state_ = kFinished;
 		return true;
 	}
-
+	
 	switch (aim_state_) {
 	// Calculate heading adjustment
 	case kStep1:
-		degrees_off_center_ = targeting_->GetHorizontalAngleOfTarget(&current_target_);
+		degrees_off_ = targeting_->GetHorizontalAngleOfTarget(&current_target_);
 		// Fall through to step 2
 		aim_state_ = kStep2;
 	// Adjust heading until aimed at target
 	case kStep2:
-		if (drive_train_->AdjustHeading(degrees_off_center_, 1.0)) {
-		//if (drive_train_->Turn((target_report_heading_+degrees_off_center_), 1.0)) {
+		if (drive_train_->AdjustHeading(degrees_off_, 1.0)) {
+		//if (drive_train_->Turn((target_report_heading_+degrees_off_), 1.0)) {
+			aim_state_ = kStep3;
+		}
+		break;
+	case kStep3:
+		degrees_off_ = targeting_->GetVerticalAngleOfTarget(&current_target_);
+		// Fall through to step 4
+		aim_state_ = kStep4;
+	case kStep4:
+		if (shooter_->SetPitchAngle(degrees_off_, 1.0)) {
 			aim_state_ = kFinished;
 			return true;
 		} else {
@@ -860,7 +991,9 @@ void TechnoJays::GetTargets() {
 
 	// Store current robot heading
 	if (drive_train_ != NULL)
-		target_report_heading_ = drive_train_->GetHeading();	
+		target_report_heading_ = drive_train_->GetHeading();
+	
+	// TODO print short summary of targets?
 }
 
 /**
@@ -916,13 +1049,13 @@ void TechnoJays::SelectTarget(Targeting::TargetHeight height) {
 	
 	// If the expected was the low height and nothing found, choose lowest target found
 	if (height == Targeting::kLow) {
-		target = (targets_report_.at(0));
+		current_target_ = (targets_report_.at(0));
 		current_target_vector_location_ = 0;
 	}
 	// Otherwise choose the highest target found
 	else {
 		current_target_vector_location_ = targets_report_.size() - 1;
-		target = (targets_report_.at(current_target_vector_location_));
+		current_target_ = (targets_report_.at(current_target_vector_location_));
 	}
 }
 
@@ -1006,6 +1139,149 @@ bool TechnoJays::AutoShoot(int power) {
 		// Fall through to kStep4
 	// Post-delay for the shooter to finish shooting
 	case kStep4:
+		// Calculate time left
+		time_left = auto_shooter_spindown_time_ - elapsed_time;
+		// If enough time has passed, we're done
+		if (time_left <= 0.0) {
+			auto_shoot_timer_->Stop();
+			auto_shoot_timer_->Reset();
+			// Retract feeder
+			feeder_->SetPiston(false);
+			// Stop spinning the shooter motor
+			shooter_->Shoot(0);
+			auto_shoot_state_ = kFinished;
+			return true;
+		} else {
+			break;
+		}
+	default:
+		shooter_->Shoot(0);
+		auto_shoot_state_ = kFinished;
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * \brief Automatically sets the feeder to the proper angle to get discs from the feeder station.
+ *
+ * \return true when the operation is complete.
+*/
+bool TechnoJays::AutoFeederHeight() {
+	// Abort if we don't have what we need
+	if (shooter_ == NULL) {
+		auto_feeder_height_state_ = kFinished;
+		return true;
+	}
+	
+	switch (auto_feeder_height_state_) {
+	case kStep1:
+		if (shooter_->SetPitchAngle(auto_feeder_height_angle_, 1.0)) {
+			auto_feeder_height_state_ = kFinished;
+			return true;
+		} else {
+			break;
+		}
+	default:
+		auto_feeder_height_state_ = kFinished;
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * \brief Automatically spins up the shooter and feeds up to 4 discs.
+ *
+ * \return true when the operation is complete.
+*/
+bool TechnoJays::AutoRapidFire() {
+	// Abort if we don't have what we need
+	if (feeder_ == NULL || shooter_ == NULL || !feeder_->feeder_enabled_ || !shooter_->shooter_enabled_) {
+		auto_shoot_state_ = kFinished;
+		return true;
+	}
+	
+	double time_left = 0.0;
+	// Get the timer value since the last event
+	double elapsed_time = auto_shoot_timer_->Get();
+
+	// Spin up the shooter and keep it moving until we're done (regardless of what step)
+	shooter_->Shoot(100);
+	
+	switch (auto_shoot_state_) {
+	// Keep track of how long we've spun up the shooter
+	case kStep1:
+		auto_shoot_timer_->Stop();
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		elapsed_time = 0.0;
+		auto_shoot_state_ = kStep2;
+		// Fall through into kStep2
+	// Pre-delay for the shooter to spinup
+	case kStep2:
+		// Calculate time left
+		time_left = auto_shooter_spinup_time_ - elapsed_time;
+		// If enough time has passed, feed a disc
+		if (time_left <= 0.0) {
+			auto_shoot_state_ = kStep3;
+			auto_shoot_timer_->Stop();
+			// Fall through to kStep3
+		} else {
+			break;
+		}
+	// Feed a disc into the shooter
+	case kStep3:
+		feeder_->SetPiston(true);
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		auto_shoot_state_ = kStep4;
+		// Fall through to kStep4
+	// Post-delay for the shooter to finish shooting
+	case kStep4:
+		// Calculate time left
+		time_left = auto_shooter_spindown_time_ - elapsed_time;
+		// If enough time has passed, retract to shoot another
+		if (time_left <= 0.0) {
+			// Retract feeder
+			feeder_->SetPiston(false);
+			auto_shoot_timer_->Stop();
+			auto_shoot_state_ = kStep5;
+			break;
+		} else {
+			break;
+		}
+	// Feed second disc into the shooter
+	case kStep5:
+		feeder_->SetPiston(true);
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		auto_shoot_state_ = kStep6;
+		// Fall through to kStep6
+	// Post-delay for the shooter to finish shooting
+	case kStep6:
+		// Calculate time left
+		time_left = auto_shooter_spindown_time_ - elapsed_time;
+		// If enough time has passed, retract to shoot another
+		if (time_left <= 0.0) {
+			// Retract feeder
+			feeder_->SetPiston(false);
+			auto_shoot_timer_->Stop();
+			auto_shoot_state_ = kStep7;
+			break;
+		} else {
+			break;
+		}
+	// Feed third disc into the shooter
+	case kStep7:
+		feeder_->SetPiston(true);
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		auto_shoot_state_ = kStep8;
+		// Fall through to kStep8
+	// Post-delay for the shooter to finish shooting
+	case kStep8:
 		// Calculate time left
 		time_left = auto_shooter_spindown_time_ - elapsed_time;
 		// If enough time has passed, we're done

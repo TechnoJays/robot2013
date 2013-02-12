@@ -398,6 +398,29 @@ Targeting::TargetHeight Targeting::GetEnumHeightOfTarget(double height) {
 }
 
 /**
+ * \brief Get the height off the floor of the provided value as a character string.
+ *
+ * \param target_height the height as an enumeration.
+ * \param buffer the characeter array to contain the height as a character array.
+*/
+void Targeting::GetStringHeightOfTarget(TargetHeight target_height, char *buffer) {
+	switch(target_height) {
+	case Targeting::kHigh:
+		strncpy(buffer, "High", sizeof(buffer));
+		break;
+	case Targeting::kMedium:
+		strncpy(buffer, "Medium", sizeof(buffer));
+		break;
+	case Targeting::kLow:
+		strncpy(buffer, "Low", sizeof(buffer));
+		break;
+	default:
+		strncpy(buffer, "Unknown", sizeof(buffer));
+		break;			
+	}
+}
+
+/**
  * \brief Get the amount off target as a percentage of the camera field of view.
  *
  * \param target pointer to a ParticleAnalysisReport of an image target.

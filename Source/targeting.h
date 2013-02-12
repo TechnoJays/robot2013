@@ -44,6 +44,7 @@ public:
 	double GetCameraHeightOfTarget(ParticleAnalysisReport *target);
 	TargetHeight GetEnumHeightOfTarget(ParticleAnalysisReport *target);
 	TargetHeight GetEnumHeightOfTarget(double height);
+	void GetStringHeightOfTarget(TargetHeight target_height, char *buffer);
 	double GetFOVPercentageOfTarget(ParticleAnalysisReport *target);
 	bool GetTargets(std::vector<ParticleAnalysisReport> &report);
 	void InitializeCamera();

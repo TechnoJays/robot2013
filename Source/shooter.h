@@ -35,6 +35,7 @@ public:
 	void SetLogState(bool state);
 	bool SetPitch(int encoder_count, float speed);
 	bool SetPitch(double time, Direction direction, float speed);
+	bool SetPitchAngle(float angle, float speed);
 	void MovePitch(float directional_speed, bool turbo);
 	void Shoot(int power_as_percent);
 	bool Shoot(double time, int power_as_percent);
@@ -78,6 +79,8 @@ private:
 	double time_threshold_;					///< time in seconds for autonomous functions to decide when the pitch is 'close enough' to the timed movement
 	float auto_medium_time_threshold_;		///< time threshold between near and medium for autonomous functions
 	float auto_far_time_threshold_;			///< time threshold between medium and far for autonomous functions
+	float angle_linear_fit_gradient_;		///< linear fit gradient used in converting an angle to encoder counts for setting the pitch
+	float angle_linear_fit_constant_;		///< linear fit constant used in converting an angle to encoder counts for setting the pitch
 
 	// Private member variables
 	int encoder_count_;			///< current number of encoder counts for the pitch

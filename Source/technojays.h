@@ -41,7 +41,6 @@ public:
 	void TeleopInit();
 	void TeleopContinuous();
 	void TeleopPeriodic();
-	bool AutoShoot(int power);
 
 	// Public member variables
 	vector<ParticleAnalysisReport> targets_report_;	///< particle reports of matching hoop targets
@@ -64,12 +63,16 @@ private:
 	
 	// Private methods
 	bool AimAtTarget();
+	bool AutoFeederHeight();
 	bool AutoFindTarget(Targeting::TargetHeight height);
+	bool AutoRapidFire();
+	bool AutoShoot(int power);
 	void GetTargets();
 	void Initialize(const char * parameters, bool logging_enabled);
 	void NextTarget();
 	void PrintTargetInfo();
 	void SelectTarget(Targeting::TargetHeight height);
+	
 	
 	// Private member objects
 	AutoScript *autoscript_;				///< autoscript object used to load autonomous script from a file
@@ -90,8 +93,10 @@ private:
 	double initial_target_search_time_;		///< the amount of time required for the Targeting module to search for targets
 	float auto_shooter_spinup_time_;		///< the amount of time to spin up the shooter before feeding a disc	
 	float auto_shooter_spindown_time_;		///< the amount of time to spin down the shooter after feeding a disc
+	float auto_feeder_height_angle_;		///< the angle of the shooter required to set the feeder to the height for the feeder station
 	
 	// Private member variables
+	float previous_scoring_dpad_y_;				///< the last known value of the Y axis on the scoring directional pad
 	bool driver_turbo_;							///< true if the driver controller is requesting turbo mode
 	bool scoring_turbo_;						///< true if the scoring controller is requesting turbo mode
 	bool detailed_logging_enabled_;				///< true if detailed robot and driver details should be logged
@@ -105,11 +110,14 @@ private:
 	bool current_command_in_progress_;			///< true when an autonomous command has already started
 	autoscript_command current_command_;		///< the current autonomous command being executed
 	float target_report_heading_;				///< the heading of the robot when the target report was generated
-	double degrees_off_center_;					///< the number of degrees the robot is off from facing the selected target
+	double degrees_off_;						///< the number of degrees the robot is off from facing the selected target
 	unsigned current_target_vector_location_;	///< the index in the particle report vector of the current target, used when cycling through targets
 	AutoState auto_shoot_state_;				///< the current state of the AutoShoot autonomous function
 	AutoState aim_state_;						///< the current state of the AimAtTarget function
 	AutoState auto_find_target_state_;			///< the current state of the AutoFindTarget function
+	AutoState auto_rapid_fire_state_;			///< the current state of the AutoRapidFire function
+	AutoState auto_cycle_target_state_;			///< the current state of the AutoCycleTarget function
+	AutoState auto_feeder_height_state_;		///< the current state of the AutoFeederHeight function
 };
 
 #endif
