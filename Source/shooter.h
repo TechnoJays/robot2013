@@ -85,7 +85,7 @@ private:
 	// Private member variables
 	int encoder_count_;			///< current number of encoder counts for the pitch
 	bool log_enabled_;			///< true if logging is enabled
-	char *parameters_file_;		///< path and filename of the parameter file to read
+	char parameters_file_[25];	///< path and filename of the parameter file to read
 	ProgramState robot_state_;	///< current state of the robot obtained from the field
 };
 

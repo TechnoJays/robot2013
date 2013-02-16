@@ -172,7 +172,6 @@ int AutoScript::GetAvailableScripts(std::vector<std::string> &files) {
 	}
 	
 	closedir(dp);
-	// TODO SafeDelete?
 	return file_count_;
 }
 

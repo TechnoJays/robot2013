@@ -108,6 +108,8 @@ void Shooter::Initialize(char * parameters, bool logging_enabled) {
 	encoder_min_limit_ = -1;
 	shooter_min_power_speed_ = 0.4;
 	shooter_power_adjustment_ratio_ = 0.006;
+	angle_linear_fit_gradient_ = 1.0;
+	angle_linear_fit_constant_ = 0.0;
 
 	// Initialize private member variables
 	encoder_count_ = 0;

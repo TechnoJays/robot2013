@@ -75,6 +75,7 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	scoring_turbo_ = false;
 	current_command_complete_ = false;
 	current_command_in_progress_ = false;
+	autoscript_files_counter_ = 0;
 	previous_scoring_dpad_y_ = 0.0;
 	target_report_heading_ = 0.0;
 	degrees_off_ = 0.0;
@@ -923,7 +924,8 @@ void TechnoJays::PrintTargetInfo() {
 */
 bool TechnoJays::AimAtTarget() {
 	// Abort if we don't have what we need
-	if ((current_target_.imageWidth == 0 && current_target_.imageHeight == 0) || drive_train_ == NULL || shooter_ == NULL) {
+	if ((current_target_.imageWidth == 0 && current_target_.imageHeight == 0) || drive_train_ == NULL 
+			|| shooter_ == NULL || targeting_ == NULL) {
 		aim_state_ = kFinished;
 		return true;
 	}
@@ -937,7 +939,6 @@ bool TechnoJays::AimAtTarget() {
 	// Adjust heading until aimed at target
 	case kStep2:
 		if (drive_train_->AdjustHeading(degrees_off_, 1.0)) {
-		//if (drive_train_->Turn((target_report_heading_+degrees_off_), 1.0)) {
 			aim_state_ = kStep3;
 		}
 		break;
@@ -993,7 +994,6 @@ void TechnoJays::GetTargets() {
 	if (drive_train_ != NULL)
 		target_report_heading_ = drive_train_->GetHeading();
 	
-	// TODO print short summary of targets?
 }
 
 /**
@@ -1071,6 +1071,7 @@ bool TechnoJays::AutoFindTarget(Targeting::TargetHeight height) {
 	case kStep1:
 		GetTargets();
 		SelectTarget(height);
+		aim_state_ = kStep1;
 		auto_find_target_state_ = kStep2;
 		break;
 	// Aim at the selected target
