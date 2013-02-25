@@ -67,6 +67,7 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	auto_shooter_spinup_time_ = 1.5;
 	auto_shooter_spindown_time_ = 0.5;
 	auto_feeder_height_angle_ = 50.0;
+	period_ = 0.0;
 
 	// Initialize private member variables
 	log_enabled_ = false;
@@ -125,7 +126,6 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 */
 bool TechnoJays::LoadParameters() {
 	// Define and initialize local variables
-	double period = 0.0;
 	bool parameters_read = false; // This should default to false
 	
 	// Close and delete old objects
@@ -147,7 +147,7 @@ bool TechnoJays::LoadParameters() {
 	
 	// Set variables based on the parameters file
 	if (parameters_read) {
-		parameters_->GetValue("PERIOD", &period);
+		parameters_->GetValue("PERIOD", &period_);
 		parameters_->GetValue("CAMERA_BOOT_TIME", &camera_boot_time_);
 		parameters_->GetValue("INITIAL_TARGET_SEARCH_TIME", &initial_target_search_time_);
 		parameters_->GetValue("AUTO_SHOOTER_SPINUP_TIME", &auto_shooter_spinup_time_);
@@ -157,7 +157,7 @@ bool TechnoJays::LoadParameters() {
 
 	// Set the rate for the periodic methods
 	// SetPeriod is part of the base class
-	IterativeRobot::SetPeriod(period);
+	IterativeRobot::SetPeriod(period_);
 	
 	return parameters_read;
 }
@@ -180,6 +180,8 @@ void TechnoJays::RobotInit() {
  * or starting/restarting timers.
 */
 void TechnoJays::DisabledInit() {
+	IterativeRobot::SetPeriod(period_);
+	
 	// Set the current state of the robot
 	if (climber_ != NULL)
 		climber_->SetRobotState(kDisabled);
@@ -218,8 +220,6 @@ void TechnoJays::DisabledInit() {
 	if (drive_train_ != NULL) {
 		drive_train_->ReadSensors();
 	}
-	if (feeder_ != NULL)
-		feeder_->ReadSensors();
 	
 	// Reset and start a timer for camera initialization
 	timer_->Stop();
@@ -252,13 +252,6 @@ void TechnoJays::DisabledContinuous() {
 			shooter_->Shoot(0);
 	}
 
-	if (feeder_ != NULL)
-		feeder_->ReadSensors();
-		if (feeder_->GetPressureSwitchState())
-			feeder_->SetCompressor(true);
-		else
-			feeder_->SetCompressor(false);
-	
 	// Initialize the targeting camera after a time delay
 	// The camera must be configured before use, but it has a long
 	//   bootup time, so a time delay is required.
@@ -286,6 +279,8 @@ void TechnoJays::DisabledContinuous() {
  * match starts.  E.g., Changing the autonomous routine.
 */
 void TechnoJays::DisabledPeriodic() {
+	DisabledContinuous();
+	
 	if (user_interface_ != NULL) {
 		// Allow the user to cycle between the various autonomous programs while in Disabled mode
 		if (user_interface_->GetButtonState(UserInterface::kDriver,UserInterface::kStart) == 1 &&
@@ -315,6 +310,8 @@ void TechnoJays::DisabledPeriodic() {
  * or starting/restarting timers.
 */
 void TechnoJays::AutonomousInit() {
+	IterativeRobot::SetPeriod(period_);
+	
 	// Reset the timer in case the camera initialization didn't
 	timer_->Stop();
 	timer_->Reset();
@@ -366,12 +363,6 @@ void TechnoJays::AutonomousContinuous() {
 		drive_train_->ReadSensors();
 	if (climber_ != NULL)
 		climber_->ReadSensors();
-	if (feeder_ != NULL)
-		feeder_->ReadSensors();	
-		if (feeder_->GetPressureSwitchState())
-			feeder_->SetCompressor(true);
-		else
-			feeder_->SetCompressor(false);
 	
 	// If autoscript is defined, execute the commands
 	if (autoscript_ != NULL && !autoscript_file_name_.empty() && autoscript_file_name_.size() > 0) {
@@ -573,6 +564,7 @@ void TechnoJays::AutonomousContinuous() {
  * changed back to 0 in TeleopInit() and DisabledInit().
 */
 void TechnoJays::AutonomousPeriodic() {
+	AutonomousContinuous();
 }
 
 /**
@@ -586,6 +578,8 @@ void TechnoJays::AutonomousPeriodic() {
  * starting/restarting timers.
 */
 void TechnoJays::TeleopInit() {
+	IterativeRobot::SetPeriod(period_);
+	
 	// Reset the timer in case the camera initialization didn't
 	timer_->Stop();
 	timer_->Reset();
@@ -625,12 +619,6 @@ void TechnoJays::TeleopContinuous() {
 		drive_train_->ReadSensors();
 	if (climber_ != NULL)
 		climber_->ReadSensors();
-	if (feeder_ != NULL)
-		feeder_->ReadSensors();
-		if (feeder_->GetPressureSwitchState())
-			feeder_->SetCompressor(true);
-		else
-			feeder_->SetCompressor(false);
 
 	// Log detailed data if enabled
 	if (detailed_logging_enabled_) {
@@ -640,8 +628,6 @@ void TechnoJays::TeleopContinuous() {
 			drive_train_->LogCurrentState();
 		if (climber_ != NULL)
 			climber_->LogCurrentState();
-		if (feeder_ != NULL)
-			feeder_->LogCurrentState();
 	}
 	
 	// Perform any TeleOp Autonomous routines
@@ -650,6 +636,7 @@ void TechnoJays::TeleopContinuous() {
 			auto_rapid_fire_state_ = kFinished;
 	}
 	if (auto_shoot_state_ != kFinished) {
+		//log_->WriteLine("Calling AS in telecont\n");
 		if (AutoShoot(100))
 			auto_shoot_state_ = kFinished;
 	}
@@ -693,6 +680,8 @@ void TechnoJays::TeleopContinuous() {
  * performing user requested semi-autonomous functions.
 */
 void TechnoJays::TeleopPeriodic() {
+	TeleopContinuous();
+	
 	if (user_interface_ != NULL) {
 		float driver_left_y = 0.0;
 		float driver_right_x = 0.0;
@@ -741,12 +730,18 @@ void TechnoJays::TeleopPeriodic() {
 				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kRightTrigger)) {
 			auto_rapid_fire_state_ = kFinished;
 			auto_shoot_state_ = kStep1;
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "AutoShoot..");
+			user_interface_->OutputUserMessage(output_buffer_, true);
 		}
 		// Rapid Fire
 		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kX) == 1
 				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kX)) {
 			auto_shoot_state_ = kFinished;
 			auto_rapid_fire_state_ = kStep1;
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "Rapid Fire..");
+			user_interface_->OutputUserMessage(output_buffer_, true);
 		}
 		// Find Targets
 		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kB) == 1 
@@ -754,6 +749,9 @@ void TechnoJays::TeleopPeriodic() {
 			auto_cycle_target_state_ = kFinished;
 			auto_feeder_height_state_ = kFinished;
 			auto_find_target_state_ = kStep1;
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "Find Targets..");
+			user_interface_->OutputUserMessage(output_buffer_, true);
 		}
 		// Next Target
 		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kY) == 1 
@@ -768,6 +766,9 @@ void TechnoJays::TeleopPeriodic() {
 			auto_find_target_state_ = kFinished;
 			auto_cycle_target_state_ = kFinished;
 			auto_feeder_height_state_ = kStep1;
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "AutoFeedHeight..");
+			user_interface_->OutputUserMessage(output_buffer_, true);
 		}
 		
 		// Manually control the robot
@@ -787,7 +788,7 @@ void TechnoJays::TeleopPeriodic() {
 				climber_->Move(scoring_right_y, scoring_turbo_);
 			}
 		}
-		else if (true) {
+		else {
 			// Don't put the auto programs above for this one since they're not directly using the winch/climber
 			// If we did, the climber/winch motor wouldn't get set to 0 while they ran and we'd get safety errors
 			if (climber_ != NULL) {
@@ -826,7 +827,8 @@ void TechnoJays::TeleopPeriodic() {
 		}
 		
 		// Feeder
-		if (scoring_dpad_y != 0.0 && previous_scoring_dpad_y_ != scoring_dpad_y) {
+		if (scoring_dpad_y != 0.0 && previous_scoring_dpad_y_ != scoring_dpad_y &&
+				user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kLeftTrigger) == 1) {
 			auto_shoot_state_ = kFinished;
 			auto_rapid_fire_state_ = kFinished;
 			if (feeder_ != NULL) {
@@ -874,11 +876,6 @@ void TechnoJays::TeleopPeriodic() {
 			if (climber_ != NULL) {
 				climber_->LogCurrentState();
 				climber_->GetCurrentState(output_buffer_);
-				user_interface_->OutputUserMessage(output_buffer_, false);
-			}
-			if (feeder_ != NULL) {
-				feeder_->LogCurrentState();
-				feeder_->GetCurrentState(output_buffer_);
 				user_interface_->OutputUserMessage(output_buffer_, false);
 			}
 		}
@@ -929,7 +926,11 @@ bool TechnoJays::AimAtTarget() {
 		aim_state_ = kFinished;
 		return true;
 	}
-	
+
+	memset(output_buffer_, 0, sizeof(output_buffer_));
+	sprintf(output_buffer_, "Aiming...");
+	user_interface_->OutputUserMessage(output_buffer_, true);
+
 	switch (aim_state_) {
 	// Calculate heading adjustment
 	case kStep1:
@@ -949,12 +950,18 @@ bool TechnoJays::AimAtTarget() {
 	case kStep4:
 		if (shooter_->SetPitchAngle(degrees_off_, 1.0)) {
 			aim_state_ = kFinished;
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "Finished.");
+			user_interface_->OutputUserMessage(output_buffer_, false);
 			return true;
 		} else {
 			break;
 		}
 	default:
 		aim_state_ = kFinished;
+		memset(output_buffer_, 0, sizeof(output_buffer_));
+		sprintf(output_buffer_, "Finished.");
+		user_interface_->OutputUserMessage(output_buffer_, false);
 		return true;
 	}
 
@@ -1097,22 +1104,24 @@ bool TechnoJays::AutoFindTarget(Targeting::TargetHeight height) {
  * \return true when the operation is complete.
 */
 bool TechnoJays::AutoShoot(int power) {
+	//log_->WriteLine("AS1\n");
 	// Abort if we don't have what we need
 	if (feeder_ == NULL || shooter_ == NULL || !feeder_->feeder_enabled_ || !shooter_->shooter_enabled_) {
 		auto_shoot_state_ = kFinished;
 		return true;
 	}
-	
+	//log_->WriteLine("AS2\n");
 	double time_left = 0.0;
 	// Get the timer value since the last event
 	double elapsed_time = auto_shoot_timer_->Get();
 
 	// Spin up the shooter and keep it moving until we're done (regardless of what step)
 	shooter_->Shoot(power);
-	
+	//log_->WriteLine("AS3\n");
 	switch (auto_shoot_state_) {
 	// Keep track of how long we've spun up the shooter
 	case kStep1:
+		//log_->WriteLine("AS4\n");
 		auto_shoot_timer_->Stop();
 		auto_shoot_timer_->Reset();
 		auto_shoot_timer_->Start();
@@ -1121,6 +1130,7 @@ bool TechnoJays::AutoShoot(int power) {
 		// Fall through into kStep2
 	// Pre-delay for the shooter to spinup
 	case kStep2:
+		//log_->WriteLine("AS5\n");
 		// Calculate time left
 		time_left = auto_shooter_spinup_time_ - elapsed_time;
 		// If enough time has passed, feed a disc
@@ -1133,6 +1143,7 @@ bool TechnoJays::AutoShoot(int power) {
 		}
 	// Feed a disc into the shooter
 	case kStep3:
+		//log_->WriteLine("AS6\n");
 		feeder_->SetPiston(true);
 		auto_shoot_timer_->Reset();
 		auto_shoot_timer_->Start();
@@ -1140,6 +1151,7 @@ bool TechnoJays::AutoShoot(int power) {
 		// Fall through to kStep4
 	// Post-delay for the shooter to finish shooting
 	case kStep4:
+		//log_->WriteLine("AS7\n");
 		// Calculate time left
 		time_left = auto_shooter_spindown_time_ - elapsed_time;
 		// If enough time has passed, we're done
@@ -1156,11 +1168,13 @@ bool TechnoJays::AutoShoot(int power) {
 			break;
 		}
 	default:
+		//log_->WriteLine("AS8\n");
 		shooter_->Shoot(0);
 		auto_shoot_state_ = kFinished;
 		return true;
 	}
 
+	//log_->WriteLine("AS9\n");
 	return false;
 }
 

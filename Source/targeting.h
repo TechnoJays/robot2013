@@ -75,7 +75,7 @@ private:
 	Parameters *parameters_;							///< parameters object used to load targeting parameters from a file
 
 	// Private parameters
-	char camera_ip_address_[16];					///< the IP address of the camera we are connecting to
+	//char camera_ip_address_[16];					///< the IP address of the camera we are connecting to
 	float camera_view_angle_;						///< the viewing angle of the camera, used in various calculations
 	int camera_resolution_;							///< the resolution of the images taken by the camera
 	int frames_per_second_;							///< the FPS of the camera

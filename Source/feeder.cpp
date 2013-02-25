@@ -58,8 +58,7 @@ Feeder::~Feeder() {
 	}
 	SafeDelete(log_);
 	SafeDelete(parameters_);
-    SafeDelete(pressure_switch_);
-    SafeDelete(compressor_power_);
+	SafeDelete(compressor_);
     SafeDelete(piston_);
 }
 
@@ -74,21 +73,18 @@ Feeder::~Feeder() {
 void Feeder::Initialize(char * parameters, bool logging_enabled) {
 	// Initialize public member variables
 	feeder_enabled_ = false;
-	pressure_switch_enabled_ = false;
-	compressor_relay_enabled_ = false;
+	compressor_enabled_ = false;
 	solenoid_enabled_ = false;
 
 	// Initialize private member objects
 	log_ = NULL;
 	parameters_ = NULL;
-    pressure_switch_ = NULL;
-    compressor_power_ = NULL;
+	compressor_ = NULL;
     piston_ = NULL;
 	
 	// Initialize private parameters
 
     // Initialize private member variables
-    pressure_switch_state_ = 0;
 	log_enabled_ = false;
 	robot_state_ = kDisabled;
 	
@@ -122,8 +118,7 @@ bool Feeder::LoadParameters() {
 	
 	// Close and delete old objects
 	SafeDelete(parameters_);
-    SafeDelete(pressure_switch_);
-    SafeDelete(compressor_power_);
+	SafeDelete(compressor_);
     SafeDelete(piston_);
 	
 	// Attempt to read the parameters file
@@ -147,26 +142,12 @@ bool Feeder::LoadParameters() {
 		parameters_->GetValue("SOLENOID_CHANNEL", &solenoid_channel);
 	}
 	
-	// Check if the pressure switch is present/enabled
-	if (pressure_switch_channel > 0) {
-		pressure_switch_ = new DigitalInput(pressure_switch_channel);
-		if (pressure_switch_ != NULL) {
-			pressure_switch_enabled_ = true;
+	// Check if the compressor is present/enabled
+	if (pressure_switch_channel > 0 && compressor_relay_channel > 0) {
+		compressor_ = new Compressor(pressure_switch_channel, compressor_relay_channel);
+		if (compressor_ != NULL) {
+			compressor_enabled_ = true;
 		}
-	}
-	else {
-		pressure_switch_enabled_ = false;
-	}
-
-	// Check if the compressor relay is present/enabled
-	if (compressor_relay_channel > 0) {
-		compressor_power_ = new Relay(compressor_relay_channel, Relay::kForwardOnly);
-		if (compressor_power_ != NULL) {
-			compressor_relay_enabled_ = true;
-		}
-	}
-	else {
-		compressor_relay_enabled_ = false;
 	}
 
 	// Check if the solenoid is present/enabled
@@ -181,23 +162,18 @@ bool Feeder::LoadParameters() {
 	}
 	
 	// Feeder is only enabled if everything is working
-	if (pressure_switch_enabled_ && compressor_relay_enabled_ && solenoid_enabled_)
+	//if (pressure_switch_enabled_ && compressor_relay_enabled_ && solenoid_enabled_)
+	if (compressor_enabled_ && solenoid_enabled_)
 		feeder_enabled_ = true;
 	else
 		feeder_enabled_ = false;
 	
 	if (log_enabled_) {
-		if (pressure_switch_enabled_) {
-			log_->WriteLine("Pressure switch enabled\n");
+		if (compressor_enabled_) {
+			log_->WriteLine("Compressor enabled\n");
 		}
 		else {
-			log_->WriteLine("Pressure switch disabled\n");
-		}
-		if (compressor_relay_enabled_) {
-			log_->WriteLine("Compressor relay enabled\n");
-		}
-		else {
-			log_->WriteLine("Compressor relay disabled\n");
+			log_->WriteLine("Compressor disabled\n");
 		}
 		if (solenoid_enabled_) {
 			log_->WriteLine("Solenoid enabled\n");
@@ -217,15 +193,6 @@ bool Feeder::LoadParameters() {
 }
 
 /**
- * \brief Read and store current sensor values.
-*/
-void Feeder::ReadSensors() {
-	if (pressure_switch_enabled_) {
-		pressure_switch_state_ = pressure_switch_->Get();
-	}
-}
-
-/**
  * \brief Set the current state of the robot and perform any actions necessary during mode changes.
  *
  * \param state current robot state.
@@ -233,30 +200,24 @@ void Feeder::ReadSensors() {
 void Feeder::SetRobotState(ProgramState state) {
 	robot_state_ = state;
 		
-/*	if (state == kDisabled) {
+	if (state == kDisabled) {
+		if (compressor_enabled_) {
+			//compressor_->Stop();
+			if (!compressor_->Enabled())
+				compressor_->Start();
+		}
 	}
 	else if (state == kTeleop) {
+		if (compressor_enabled_) {
+			if (!compressor_->Enabled())
+				compressor_->Start();
+		}
 	}
 	else if (state == kAutonomous) {
-	}*/
-}
-
-/**
- * \brief Return a string containing sensor and status variables.
- *
- * \param output_buffer empty character array to contain the string.
-*/
-void Feeder::GetCurrentState(char * output_buffer) {
-	sprintf(output_buffer, "%1i", pressure_switch_state_);
-}
-
-/**
- * \brief Log sensor and status variables when requested.
-*/
-void Feeder::LogCurrentState() {
-	if (log_ != NULL) {
-		if (pressure_switch_enabled_)
-			log_->WriteValue("Pressure switch", (int) pressure_switch_state_, true);
+		if (compressor_enabled_) {
+			if (!compressor_->Enabled())
+				compressor_->Start();
+		}
 	}
 }
 
@@ -270,35 +231,6 @@ void Feeder::SetLogState(bool state) {
 		log_enabled_ = true;
 	else
 		log_enabled_ = false;
-}
-
-/**
- * \brief Get the pressure switch state as a boolean
- *
- * \return true if the pressure switch is active/closed.
-*/
-bool Feeder::GetPressureSwitchState() {
-	if (pressure_switch_state_ > 0)
-		return true;
-	else
-		return false;
-}
-
-/**
- * \brief Set the compressor relay on/off.
- *
- * \param state true if the compressor should be on
-*/
-void Feeder::SetCompressor(bool state) {
-	// Abort if feeder not available
-	if (!feeder_enabled_ || !compressor_relay_enabled_)
-		return;
-	Relay::Value relay_state;
-	if (state)
-		relay_state = Relay::kForward;
-	else
-		relay_state = Relay::kOff;
-	compressor_power_->Set(relay_state);
 }
 
 /**

@@ -170,6 +170,7 @@ void Targeting::Initialize(const char * parameters, bool logging_enabled) {
 bool Targeting::LoadParameters() {
 	// Define and initialize local variables
 	bool parameters_read = false;	// This should default to false
+	int camera_present = 0;
 	
 	// Close and delete old objects
 	SafeDelete(parameters_);
@@ -192,8 +193,8 @@ bool Targeting::LoadParameters() {
 	if (parameters_read) {
 		parameters_->GetValue("CAMERA_VIEW_ANGLE", &camera_view_angle_);
 		// FIXME
-		parameters_->GetValue("CAMERA_IP_ADDRESS", camera_ip_address_);
-		//parameters_->GetValue("CAMERA_PRESENT", &camera_present);
+		//parameters_->GetValue("CAMERA_IP_ADDRESS", camera_ip_address_);
+		parameters_->GetValue("CAMERA_PRESENT", &camera_present);
 		parameters_->GetValue("CAMERA_RESOLUTION", &camera_resolution_);
 		parameters_->GetValue("FRAMES_PER_SECOND", &frames_per_second_);
 		parameters_->GetValue("COLOR_LEVEL", &color_level_);
@@ -224,16 +225,16 @@ bool Targeting::LoadParameters() {
 
 	// FIXME
 	// Check if the camera is present/enabled
-	if (camera_ip_address_ != NULL && strlen(camera_ip_address_) > 0 && strcmp(camera_ip_address_, "0.0.0.0") != 0) {
+	/*if (camera_ip_address_ != NULL && strlen(camera_ip_address_) > 0 && strcmp(camera_ip_address_, "0.0.0.0") != 0) {
 		camera_enabled_ = true;
 	}
 	else {
 		camera_enabled_ = false;
-	}
-	/*if (camera_present)
+	}*/
+	if (camera_present)
 		camera_enabled_ = true;
 	else
-		camera_enabled_ = false;*/
+		camera_enabled_ = false;
 
 	if (log_enabled_) {
 		if (camera_enabled_) {
@@ -463,8 +464,8 @@ void Targeting::InitializeCamera() {
 	if (camera_enabled_ && !camera_initialized_) {
 		// FIXME
 		//AxisCamera &axis_camera = AxisCamera::GetInstance("10.0.94.11");
-		//AxisCamera &axis_camera = AxisCamera::GetInstance(); // this worked before
-		AxisCamera &axis_camera = AxisCamera::GetInstance(camera_ip_address_);
+		AxisCamera &axis_camera = AxisCamera::GetInstance(); // this worked before
+		//AxisCamera &axis_camera = AxisCamera::GetInstance(camera_ip_address_);
 		
 		/*Error &error = axis_camera.GetError();
 		if (error.GetCode() != 0) {

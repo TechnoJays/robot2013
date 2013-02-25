@@ -1,5 +1,5 @@
-PERIOD = 0.0	# the rate for the periodic methods in the robot class, 0 = sync with DriverStation
-CAMERA_BOOT_TIME = 30.0 # the amount of time to wait before trying to connect to the camera
+PERIOD = 0.001	                    # the rate for the periodic methods in the robot class, 0 = sync with DriverStation
+CAMERA_BOOT_TIME = 30.0             # the amount of time to wait before trying to connect to the camera
 INITIAL_TARGET_SEARCH_TIME = 1.5    # the amount of time required for the Targeting module to search for targets
 AUTO_SHOOTER_SPINUP_TIME = 1.5      # the amount of time to spin up the shooter before feeding a disc
 AUTO_SHOOTER_SPINDOWN_TIME = 0.5    # the amount of time to spin down the shooter after feeding a disc

@@ -94,6 +94,7 @@ private:
 	float auto_shooter_spinup_time_;		///< the amount of time to spin up the shooter before feeding a disc	
 	float auto_shooter_spindown_time_;		///< the amount of time to spin down the shooter after feeding a disc
 	float auto_feeder_height_angle_;		///< the angle of the shooter required to set the feeder to the height for the feeder station
+	double period_;							///< the period in seconds for the periodic loops
 	
 	// Private member variables
 	float previous_scoring_dpad_y_;				///< the last known value of the Y axis on the scoring directional pad

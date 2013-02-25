@@ -1,7 +1,7 @@
 CAMERA_VIEW_ANGLE = 43.5 # actual angle=47
-CAMERA_IP_ADDRESS = 10.0.94.11
+CAMERA_PRESENT = 1
 CAMERA_RESOLUTION = 2 # 0=kResolution_640x480, 1=kResolution_640x360, 2=kResolution_320x240, kResolution_160x120
-FRAMES_PER_SECOND = 5
+FRAMES_PER_SECOND = 10
 COLOR_LEVEL = 50
 WHITE_BALANCE = 5 # 0=kWhiteBalance_Automatic, kWhiteBalance_Hold, kWhiteBalance_FixedOutdoor1, kWhiteBalance_FixedOutdoor2, kWhiteBalance_FixedIndoor, 5=kWhiteBalance_FixedFlourescent1, kWhiteBalance_FixedFlourescent2
 BRIGHTNESS = 50

@@ -1,7 +1,7 @@
 SHOOTER_MOTOR_SLOT = 1                  # cRIO slot that the shooter motor controller is connected to
-SHOOTER_MOTOR_CHANNEL = 5               # cRIO channel that the shooter motor controller is connected to
-PITCH_MOTOR_SLOT = -1                   # cRIO slot that the pitch motor controller is connected to
-PITCH_MOTOR_CHANNEL = -1                # cRIO channel that the pitch motor controller is connected to
+SHOOTER_MOTOR_CHANNEL = 2               # cRIO channel that the shooter motor controller is connected to
+PITCH_MOTOR_SLOT = 1                    # cRIO slot that the pitch motor controller is connected to
+PITCH_MOTOR_CHANNEL = 1                 # cRIO channel that the pitch motor controller is connected to
 ENCODER_A_SLOT = -1                     # cRIO slot that the pitch encoder is connected to
 ENCODER_A_CHANNEL = -1                  # cRIO channel that the pitch encoder is connected to
 ENCODER_B_SLOT = -1                     # cRIO slot that the pitch encoder is connected to

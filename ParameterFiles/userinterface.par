@@ -4,5 +4,5 @@ CONTROLLER1_AXIS = 6			# number of axis on controller 1
 CONTROLLER2_AXIS = 6			# number of axis on controller 2
 CONTROLLER1_BUTTONS = 10		# number of buttons on controller 1
 CONTROLLER2_BUTTONS = 10		# number of buttons on controller 2
-CONTROLLER1_DEAD_BAND = 0.1		# region (absolute value) of all axis on controller 1 that are ignored as potential error
-CONTROLLER2_DEAD_BAND = 0.1		# region (absolute value) of all axis on controller 2 that are ignored as potential error
+CONTROLLER1_DEAD_BAND = 0.05	# region (absolute value) of all axis on controller 1 that are ignored as potential error
+CONTROLLER2_DEAD_BAND = 0.05    # region (absolute value) of all axis on controller 2 that are ignored as potential error
