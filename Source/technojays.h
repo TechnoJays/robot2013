@@ -64,6 +64,7 @@ private:
 	// Private methods
 	bool AimAtTarget();
 	bool AutoFeederHeight();
+	bool AutoClimbingPrep();
 	bool AutoFindTarget(Targeting::TargetHeight height);
 	bool AutoRapidFire();
 	bool AutoShoot(int power);
@@ -94,6 +95,7 @@ private:
 	float auto_shooter_spinup_time_;		///< the amount of time to spin up the shooter before feeding a disc	
 	float auto_shooter_spindown_time_;		///< the amount of time to spin down the shooter after feeding a disc
 	float auto_feeder_height_angle_;		///< the angle of the shooter required to set the feeder to the height for the feeder station
+	float auto_climbing_angle_;				///< the angle of the shooter required to be out of the way for climbing
 	double period_;							///< the period in seconds for the periodic loops
 	
 	// Private member variables
@@ -119,6 +121,7 @@ private:
 	AutoState auto_rapid_fire_state_;			///< the current state of the AutoRapidFire function
 	AutoState auto_cycle_target_state_;			///< the current state of the AutoCycleTarget function
 	AutoState auto_feeder_height_state_;		///< the current state of the AutoFeederHeight function
+	AutoState auto_climbing_prep_state_;		///< the current state of the AutoClimbingPrep function
 };
 
 #endif

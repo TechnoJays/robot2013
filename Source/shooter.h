@@ -37,6 +37,7 @@ public:
 	bool SetPitch(double time, Direction direction, float speed);
 	bool SetPitchAngle(float angle, float speed);
 	void MovePitch(float directional_speed, bool turbo);
+	bool PitchClearForClimbing();
 	void Shoot(int power_as_percent);
 	bool Shoot(double time, int power_as_percent);
 	
@@ -81,6 +82,7 @@ private:
 	float auto_far_time_threshold_;			///< time threshold between medium and far for autonomous functions
 	float angle_linear_fit_gradient_;		///< linear fit gradient used in converting an angle to encoder counts for setting the pitch
 	float angle_linear_fit_constant_;		///< linear fit constant used in converting an angle to encoder counts for setting the pitch
+	int fulcrum_clear_encoder_count_;		///< number of encoder counts when the fulcrum is clear for the winch to be used
 
 	// Private member variables
 	int encoder_count_;			///< current number of encoder counts for the pitch

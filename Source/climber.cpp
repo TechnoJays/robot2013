@@ -344,12 +344,14 @@ bool Climber::Set(int encoder_count, float speed) {
 	// Check Max limit
 	if (encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
 		if (encoder_count_ > encoder_max_limit_) {
+			controller_->Set(0, 0);
 			return true;
 		}
 	}
 	// Check Min limit
 	if (encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
 		if (encoder_count_ < encoder_min_limit_) {
+			controller_->Set(0, 0);
 			return true;
 		}
 	}
@@ -421,12 +423,16 @@ bool Climber::Set(double time, Direction direction, float speed) {
 		// Check Max limit
 		if (encoder_max_limit_ > 0 && direction == kUp) {
 			if (encoder_count_ > encoder_max_limit_) {
+				controller_->Set(0, 0);
+				timer_->Stop();
 				return true;
 			}
 		}
 		// Check Min limit
 		if (encoder_min_limit_ > 0 && direction == kDown) {
 			if (encoder_count_ < encoder_min_limit_) {
+				controller_->Set(0, 0);
+				timer_->Stop();
 				return true;
 			}
 		}

@@ -110,6 +110,7 @@ void Shooter::Initialize(char * parameters, bool logging_enabled) {
 	shooter_power_adjustment_ratio_ = 0.006;
 	angle_linear_fit_gradient_ = 1.0;
 	angle_linear_fit_constant_ = 0.0;
+	fulcrum_clear_encoder_count_ = 0;
 
 	// Initialize private member variables
 	encoder_count_ = 0;
@@ -213,11 +214,13 @@ bool Shooter::LoadParameters() {
 		parameters_->GetValue("SHOOTER_POWER_ADJUSTMENT_RATIO", &shooter_power_adjustment_ratio_);
 		parameters_->GetValue("ANGLE_LINEAR_FIT_GRADIENT", &angle_linear_fit_gradient_);
 		parameters_->GetValue("ANGLE_LINEAR_FIT_CONSTANT", &angle_linear_fit_constant_);
+		parameters_->GetValue("FULCRUM_CLEAR_ENCODER_COUNT", &fulcrum_clear_encoder_count_);
 	}
 
 	// Check if the encoder is present/enabled
 	if (encoder_a_slot > 0 && encoder_a_channel > 0 && encoder_b_slot > 0 && encoder_b_channel > 0) {
-		encoder_ = new Encoder(encoder_a_slot, encoder_a_channel, encoder_b_slot, encoder_b_channel, encoder_reverse, (CounterBase::EncodingType) encoder_type);
+		//encoder_ = new Encoder(encoder_a_slot, encoder_a_channel, encoder_b_slot, encoder_b_channel, encoder_reverse, (CounterBase::EncodingType) encoder_type);
+		encoder_ = new Encoder(encoder_a_channel, encoder_b_channel, encoder_reverse, (CounterBase::EncodingType) encoder_type);
 		if (encoder_ != NULL) {
 			encoder_enabled_ = true;
 			encoder_->Start();
@@ -388,12 +391,14 @@ bool Shooter::SetPitch(int encoder_count, float speed) {
 	// Check Max limit
 	if (encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
 		if (encoder_count_ > encoder_max_limit_) {
+			pitch_controller_->Set(0, 0);
 			return true;
 		}
 	}
 	// Check Min limit
 	if (encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
 		if (encoder_count_ < encoder_min_limit_) {
+			pitch_controller_->Set(0, 0);
 			return true;
 		}
 	}
@@ -465,12 +470,16 @@ bool Shooter::SetPitch(double time, Direction direction, float speed) {
 		// Check Max limit
 		if (encoder_max_limit_ > 0 && direction == kUp) {
 			if (encoder_count_ > encoder_max_limit_) {
+				pitch_controller_->Set(0, 0);
+				timer_->Stop();
 				return true;
 			}
 		}
 		// Check Min limit
 		if (encoder_min_limit_ > 0 && direction == kDown) {
 			if (encoder_count_ < encoder_min_limit_) {
+				pitch_controller_->Set(0, 0);
+				timer_->Stop();
 				return true;
 			}
 		}
@@ -528,12 +537,14 @@ bool Shooter::SetPitchAngle(float angle, float speed) {
 	// Check Max limit
 	if (encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
 		if (encoder_count_ > encoder_max_limit_) {
+			pitch_controller_->Set(0, 0);
 			return true;
 		}
 	}
 	// Check Min limit
 	if (encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
 		if (encoder_count_ < encoder_min_limit_) {
+			pitch_controller_->Set(0, 0);
 			return true;
 		}
 	}
@@ -613,6 +624,26 @@ void Shooter::MovePitch(float directional_speed, bool turbo) {
 
 	// Set the controller speed
 	pitch_controller_->Set(directional_speed, 0);
+}
+
+/**
+ * \brief Checks to see if the pitch fulcrum is far enough back to use the winch.
+ *
+ * \return true when the fulcrum is clear, or if the encoder is not present
+*/
+bool Shooter::PitchClearForClimbing() {
+	if (encoder_enabled_) {
+		// Check the encoder position against the location where it is clear for the winch
+		if (encoder_count_ > fulcrum_clear_encoder_count_) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		return true;
+	}
 }
 
 /**

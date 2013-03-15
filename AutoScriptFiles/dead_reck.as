@@ -1,0 +1,10 @@
+pitchtime,1,5,1.0
+wait,0.5
+shoot,100
+wait,0.5
+shoot,100
+wait,0.5
+shoot,100
+wait,0.5
+shoot,100
+end

@@ -5,18 +5,18 @@ FRAMES_PER_SECOND = 10
 COLOR_LEVEL = 50
 WHITE_BALANCE = 5 # 0=kWhiteBalance_Automatic, kWhiteBalance_Hold, kWhiteBalance_FixedOutdoor1, kWhiteBalance_FixedOutdoor2, kWhiteBalance_FixedIndoor, 5=kWhiteBalance_FixedFlourescent1, kWhiteBalance_FixedFlourescent2
 BRIGHTNESS = 50
-COMPRESSION = 30
+COMPRESSION = 50
 EXPOSURE = 1 # 0=kExposure_Automatic, 1=kExposure_Hold, kExposure_FlickerFree50Hz, kExposure_FlickerFree60Hz
 ANGLE_OF_TARGET_HORIZONTAL_OFFSET = 0   # manual correction to add to horizontal angle of target calculations to compenstate for robot to camera difference
 ANGLE_OF_TARGET_VERTICAL_OFFSET = 0     # manual correction to add to vertical angle of target calculations to compenstate for robot to camera difference
 ANGLE_OF_TARGET_DISTANCE_OFFSET = 0     # manual correction to add to distance of target calculations to compenstate for robot to camera difference
 THRESHOLD_TYPE = 0 # 0=HSV, 1=HSL, 2=RGB
-THRESHOLD_PLANE_1_LOW = 60
-THRESHOLD_PLANE_1_HIGH = 100
-THRESHOLD_PLANE_2_LOW = 90
-THRESHOLD_PLANE_2_HIGH = 255
-THRESHOLD_PLANE_3_LOW = 20
-THRESHOLD_PLANE_3_HIGH = 255
+THRESHOLD_PLANE_1_LOW = 100
+THRESHOLD_PLANE_1_HIGH = 200
+THRESHOLD_PLANE_2_LOW = 40
+THRESHOLD_PLANE_2_HIGH = 110
+THRESHOLD_PLANE_3_LOW = 40
+THRESHOLD_PLANE_3_HIGH = 110
 PARTICLE_FILTER_FILLED_MINIMUM = 35 # minimum filled percent of rectangles to allow through filters
 PARTICLE_FILTER_FILLED_MAXIMUM = 65 # maximum filled percent of rectangles to allow through filters
 TARGET_RECTANGLE_RATIO_MINIMUM = 1.0 # minimum aspect ratio to allow through filters

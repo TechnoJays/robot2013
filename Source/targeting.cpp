@@ -192,8 +192,6 @@ bool Targeting::LoadParameters() {
 	// Set targeting variables based on the parameters file
 	if (parameters_read) {
 		parameters_->GetValue("CAMERA_VIEW_ANGLE", &camera_view_angle_);
-		// FIXME
-		//parameters_->GetValue("CAMERA_IP_ADDRESS", camera_ip_address_);
 		parameters_->GetValue("CAMERA_PRESENT", &camera_present);
 		parameters_->GetValue("CAMERA_RESOLUTION", &camera_resolution_);
 		parameters_->GetValue("FRAMES_PER_SECOND", &frames_per_second_);
@@ -223,14 +221,6 @@ bool Targeting::LoadParameters() {
 		parameters_->GetValue("TARGET_RECTANGLE_SCORE_THRESHOLD",&target_rectangle_score_threshold_);
 	}
 
-	// FIXME
-	// Check if the camera is present/enabled
-	/*if (camera_ip_address_ != NULL && strlen(camera_ip_address_) > 0 && strcmp(camera_ip_address_, "0.0.0.0") != 0) {
-		camera_enabled_ = true;
-	}
-	else {
-		camera_enabled_ = false;
-	}*/
 	if (camera_present)
 		camera_enabled_ = true;
 	else
@@ -462,18 +452,8 @@ bool Targeting::GetTargets(vector<ParticleAnalysisReport> &report) {
 */
 void Targeting::InitializeCamera() {
 	if (camera_enabled_ && !camera_initialized_) {
-		// FIXME
-		//AxisCamera &axis_camera = AxisCamera::GetInstance("10.0.94.11");
-		AxisCamera &axis_camera = AxisCamera::GetInstance(); // this worked before
-		//AxisCamera &axis_camera = AxisCamera::GetInstance(camera_ip_address_);
-		
-		/*Error &error = axis_camera.GetError();
-		if (error.GetCode() != 0) {
-			printf("Error getting camera instance for initialization: %i\n", int(error.GetCode()));
-			printf("Message: %s\n", error.GetMessage());
-			error.Clear();
-		}*/
-		
+		AxisCamera &axis_camera = AxisCamera::GetInstance();
+				
 		switch ((AxisCameraParams::Resolution_t) camera_resolution_) {
 			case AxisCameraParams::kResolution_640x480:
 				camera_horizontal_width_in_pixels_ = 640;
@@ -615,18 +595,8 @@ int Targeting::s_FindTargetsTask(Targeting *this_pointer) {
 */
 int Targeting::FindTargetsTask() {
 	while (true) {
-		// FIXME
-		//AxisCamera &axis_camera = AxisCamera::GetInstance("10.0.94.11");
 		AxisCamera &axis_camera = AxisCamera::GetInstance();
 		
-		// FIXME: comment this out for competitions
-		/*Error &error = axis_camera.GetError();
-		if (error.GetCode() != 0) {
-			printf("Error getting camera instance: %i\n", int(error.GetCode()));
-			printf("Message: %s\n", error.GetMessage());
-			error.Clear();
-		}*/
-
 		try {
 			// Only get an image if it's one we haven't processed yet
 			if (axis_camera.IsFreshImage()) {
@@ -635,7 +605,7 @@ int Targeting::FindTargetsTask() {
 				BinaryImage *color_filtered_image = NULL;
 				BinaryImage *large_objects_image = NULL;
 				BinaryImage *convex_hull_image = NULL;
-				BinaryImage *particle_filtered_image = NULL;
+				//BinaryImage *particle_filtered_image = NULL;
 
 				// Get an image from the camera
 				if (axis_camera.GetImage(image)) {
@@ -648,7 +618,7 @@ int Targeting::FindTargetsTask() {
 					// Create a particle filter criteria based on rectangle dimensions
 					//ParticleFilterCriteria2 criteria[] = {{IMAQ_MT_BOUNDING_RECT_WIDTH, particle_filter_width_minimum_, particle_filter_width_maximum_, false, false},
 					//									  {IMAQ_MT_BOUNDING_RECT_HEIGHT, particle_filter_height_minimum_, particle_filter_height_maximum_, false, false}};
-					ParticleFilterCriteria2 criteria[] = {{IMAQ_MT_AREA_BY_PARTICLE_AND_HOLES_AREA, particle_filter_filled_minimum_, particle_filter_filled_maximum_, false, false}};
+					//ParticleFilterCriteria2 criteria[] = {{IMAQ_MT_AREA_BY_PARTICLE_AND_HOLES_AREA, particle_filter_filled_minimum_, particle_filter_filled_maximum_, false, false}};
 
 					
 					// If an image was acquired, filter it based on HSL or RGB values
@@ -682,20 +652,27 @@ int Targeting::FindTargetsTask() {
 					}
 
 					if (large_objects_image != NULL) {
-						/*Targeting::GenerateFilename("/4_", ".bmp", 4, filename);
+						/*Targeting::GenerateFilename("/3_", ".bmp", 4, filename);
 						large_objects_image->Write(filename);*/
 						
-						particle_filtered_image = large_objects_image->ParticleFilter(criteria, 2);
+						convex_hull_image = large_objects_image->ConvexHull(false);
 						SafeDelete(large_objects_image);
 					}
 					
-					if (particle_filtered_image != NULL) {
+						/*Targeting::GenerateFilename("/4_", ".bmp", 4, filename);
+						large_objects_image->Write(filename);*/
+						
+						/*particle_filtered_image = large_objects_image->ParticleFilter(criteria, 2);
+						SafeDelete(large_objects_image);
+					}*/
+					
+					//if (particle_filtered_image != NULL) {
 						/*Targeting::GenerateFilename("/3_", ".bmp", 4, filename);
 						particle_filtered_image->Write(filename);*/
 						
-						convex_hull_image = particle_filtered_image->ConvexHull(false);
+						/*convex_hull_image = particle_filtered_image->ConvexHull(false);
 						SafeDelete(particle_filtered_image);
-					}
+					}*/
 					
 					if (convex_hull_image != NULL) {
 						/*Targeting::GenerateFilename("/5_", ".bmp", 4, filename);
@@ -739,15 +716,7 @@ int Targeting::FindTargetsTask() {
 		}
 		catch (exception& e) {
 			printf("Exception in Find Targets Task: %s\n", e.what());			
-		}
-		
-		// FIXME: comment this out for competitions
-		/*Error &error2 = axis_camera.GetError();
-		if (error2.GetCode() != 0) {
-			printf("Error getting image from camera: %i\n", int(error2.GetCode()));
-			printf("Message: %s\n", error2.GetMessage());
-			error2.Clear();
-		}*/
+		}		
 	}
 	return 0;
 }
