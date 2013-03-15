@@ -700,14 +700,14 @@ void TechnoJays::TeleopPeriodic() {
 	
 	if (user_interface_ != NULL) {
 		float driver_left_y = 0.0;
-		float driver_right_x = 0.0;
+		float driver_right_y = 0.0;
 		float scoring_left_y = 0.0;
 		float scoring_right_y = 0.0;
 		float scoring_dpad_y = 0.0;
 
 		// Get the values for the thumbsticks and dpads
 		driver_left_y = user_interface_->GetAxisValue(UserInterface::kDriver, UserInterface::kLeftY);
-		driver_right_x = user_interface_->GetAxisValue(UserInterface::kDriver, UserInterface::kRightX);
+		driver_right_y = user_interface_->GetAxisValue(UserInterface::kDriver, UserInterface::kRightY);
 		scoring_left_y = user_interface_->GetAxisValue(UserInterface::kScoring, UserInterface::kLeftY);
 		scoring_right_y = user_interface_->GetAxisValue(UserInterface::kScoring, UserInterface::kRightY);
 		scoring_dpad_y = user_interface_->GetAxisValue(UserInterface::kScoring, UserInterface::kDpadY);
@@ -715,7 +715,7 @@ void TechnoJays::TeleopPeriodic() {
 		// Log analog controls if detailed logging is enabled
 		if (detailed_logging_enabled_) {
 			log_->WriteValue("DriverLeftY", driver_left_y, true);
-			log_->WriteValue("DriverRightX", driver_right_x, true);
+			log_->WriteValue("DriverRightY", driver_right_y, true);
 			log_->WriteValue("DriverTurbo", user_interface_->GetButtonState(UserInterface::kDriver,
 				UserInterface::kRightBumper), true);
 			log_->WriteValue("ScoringLeftY", scoring_left_y, true);
@@ -879,17 +879,19 @@ void TechnoJays::TeleopPeriodic() {
 		}
 
 		// DriveTrain
-		if (driver_left_y != 0.0 || driver_right_x != 0.0) {
+		if (driver_left_y != 0.0 || driver_right_y != 0.0) {
 			auto_find_target_state_ = kFinished;
 			auto_cycle_target_state_ = kFinished;
 			if (drive_train_ != NULL) {
-				drive_train_->Drive(driver_left_y, driver_right_x, driver_turbo_);
+				//drive_train_->Drive(driver_left_y, driver_right_y, driver_turbo_);
+				drive_train_->TankDrive(driver_left_y, driver_right_y, driver_turbo_);
 			}
 		}
 		else if (auto_find_target_state_ == kFinished
 				&& auto_cycle_target_state_ == kFinished) {
 			if (drive_train_ != NULL) {
-				drive_train_->Drive(0.0, 0.0, false);
+				//drive_train_->Drive(0.0, 0.0, false);
+				drive_train_->TankDrive(0.0, 0.0, false);
 			}
 		}
 
@@ -1350,15 +1352,15 @@ bool TechnoJays::AutoRapidFire() {
 		auto_shoot_timer_->Start();
 		elapsed_time = 0.0;
 		auto_rapid_fire_state_ = kStep4;
-		// Fall through to kStep4
+		break;
 	// Post-delay for the shooter to finish shooting
 	case kStep4:
+		// Retract feeder
+		feeder_->SetPiston(false);
 		// Calculate time left
 		time_left = auto_shooter_spindown_time_ - elapsed_time;
 		// If enough time has passed, retract to shoot another
 		if (time_left <= 0.0) {
-			// Retract feeder
-			feeder_->SetPiston(false);
 			auto_shoot_timer_->Stop();
 			auto_rapid_fire_state_ = kStep5;
 			break;
@@ -1372,15 +1374,15 @@ bool TechnoJays::AutoRapidFire() {
 		auto_shoot_timer_->Start();
 		elapsed_time = 0.0;
 		auto_rapid_fire_state_ = kStep6;
-		// Fall through to kStep6
+		break;
 	// Post-delay for the shooter to finish shooting
 	case kStep6:
+		// Retract feeder
+		feeder_->SetPiston(false);
 		// Calculate time left
 		time_left = auto_shooter_spindown_time_ - elapsed_time;
 		// If enough time has passed, retract to shoot another
 		if (time_left <= 0.0) {
-			// Retract feeder
-			feeder_->SetPiston(false);
 			auto_shoot_timer_->Stop();
 			auto_rapid_fire_state_ = kStep7;
 			break;
@@ -1394,17 +1396,17 @@ bool TechnoJays::AutoRapidFire() {
 		auto_shoot_timer_->Start();
 		elapsed_time = 0.0;
 		auto_rapid_fire_state_ = kStep8;
-		// Fall through to kStep8
+		break;
 	// Post-delay for the shooter to finish shooting
 	case kStep8:
+		// Retract feeder
+		feeder_->SetPiston(false);
 		// Calculate time left
 		time_left = auto_shooter_spindown_time_ - elapsed_time;
 		// If enough time has passed, we're done
 		if (time_left <= 0.0) {
 			auto_shoot_timer_->Stop();
 			auto_shoot_timer_->Reset();
-			// Retract feeder
-			feeder_->SetPiston(false);
 			// Stop spinning the shooter motor
 			shooter_->Shoot(0);
 			auto_rapid_fire_state_ = kFinished;

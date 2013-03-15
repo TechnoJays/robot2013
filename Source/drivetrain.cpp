@@ -659,6 +659,35 @@ void DriveTrain::Drive(float directional_speed, float directional_turn, bool tur
 }
 
 /**
+ * \brief Drives the robot using the left and right thumbsticks 'Tank' style
+ *
+ * \param left_stick the vertical position of the left thumbstick
+ * \param right_stick the vertical position of the right thumbstick
+ * \param turbo true if the robot should move at 'turbo' speed.
+*/
+void DriveTrain::TankDrive(float left_stick, float right_stick, bool turbo) {
+	// Abort if robot drive is not available
+	if (robot_drive_ == NULL) {
+		return;
+	}
+	
+	float left = 0.0;
+	float right = 0.0;
+	
+	// Determine actual speed using normal/turbo speed ratios
+	if (turbo) {
+		left = turbo_linear_speed_ratio_ * left_stick;
+		right = turbo_linear_speed_ratio_ * right_stick;
+	}
+	else {
+		left = normal_linear_speed_ratio_ * left_stick;
+		right = normal_linear_speed_ratio_ * right_stick;
+	}
+		
+	robot_drive_->TankDrive(left, right, false);	
+}
+
+/**
  * \brief Turns left/right to face a specific heading provided by the argument.
  *
  * \param heading the desired heading in degrees.

@@ -40,6 +40,7 @@ public:
 	bool Drive(double length, float speed);										// Diving via accelerometer
 	bool Drive(double time, Direction direction, float speed);					// Driving via time
 	void Drive(float directional_speed, float directional_turn, bool turbo);	// Manual driving
+	void TankDrive(float left_stick, float right_stick, bool turbo);			// Manual driving in 'Tank' mode
 	bool Turn(float heading, float speed);										// Turning via gyro
 	bool Turn(double time, Direction direction, float speed);					// Turning via time
 	float GetHeading();
