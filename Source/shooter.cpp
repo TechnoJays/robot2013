@@ -602,13 +602,13 @@ void Shooter::MovePitch(float directional_speed, bool turbo) {
 	if (encoder_enabled_) {
 		// Check the encoder position against the boundaries if boundaries enabled
 		// Check Max limit
-		if (encoder_max_limit_ > 0 && ((directional_speed * pitch_up_direction_) > 0)) {
+		if (encoder_max_limit_ > 0 && ((directional_speed * pitch_down_direction_) > 0)) {
 			if (encoder_count_ > encoder_max_limit_) {
 				directional_speed = 0.0;
 			}
 		}
 		// Check Min limit
-		if (encoder_min_limit_ > 0 && ((directional_speed * pitch_down_direction_) > 0)) {
+		if (encoder_min_limit_ > 0 && ((directional_speed * pitch_up_direction_) > 0)) {
 			if (encoder_count_ < encoder_min_limit_) {
 				directional_speed = 0.0;
 			}
