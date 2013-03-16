@@ -413,17 +413,6 @@ bool Shooter::SetPitch(int encoder_count, float speed) {
 		// Calculate the direction needed to move, and turn into a speed
 		if ((encoder_count - encoder_count_) > 0) {
 			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
-				movement_direction = pitch_up_direction_ * speed * auto_far_speed_ratio_;
-			}
-			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
-				movement_direction = pitch_up_direction_ * speed * auto_medium_speed_ratio_;
-			}
-			else {
-				movement_direction = pitch_up_direction_ * speed * auto_near_speed_ratio_;
-			}
-		}
-		else {
-			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
 				movement_direction = pitch_down_direction_ * speed * auto_far_speed_ratio_;
 			}
 			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
@@ -431,6 +420,17 @@ bool Shooter::SetPitch(int encoder_count, float speed) {
 			}
 			else {
 				movement_direction = pitch_down_direction_ * speed * auto_near_speed_ratio_;
+			}
+		}
+		else {
+			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
+				movement_direction = pitch_up_direction_ * speed * auto_far_speed_ratio_;
+			}
+			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
+				movement_direction = pitch_up_direction_ * speed * auto_medium_speed_ratio_;
+			}
+			else {
+				movement_direction = pitch_up_direction_ * speed * auto_near_speed_ratio_;
 			}
 		}
 		
@@ -468,7 +468,7 @@ bool Shooter::SetPitch(double time, Direction direction, float speed) {
 	if (encoder_enabled_) {
 		// Check the encoder position against the boundaries if boundaries enabled
 		// Check Max limit
-		if (encoder_max_limit_ > 0 && direction == kUp) {
+		if (encoder_max_limit_ > 0 && direction == kDown) {
 			if (encoder_count_ > encoder_max_limit_) {
 				pitch_controller_->Set(0, 0);
 				timer_->Stop();
@@ -476,7 +476,7 @@ bool Shooter::SetPitch(double time, Direction direction, float speed) {
 			}
 		}
 		// Check Min limit
-		if (encoder_min_limit_ > 0 && direction == kDown) {
+		if (encoder_min_limit_ > 0 && direction == kUp) {
 			if (encoder_count_ < encoder_min_limit_) {
 				pitch_controller_->Set(0, 0);
 				timer_->Stop();
@@ -531,7 +531,7 @@ bool Shooter::SetPitchAngle(float angle, float speed) {
 	float movement_direction = 0.0;
 	
 	// Convert angle to encoder position
-	int encoder_count = (int) floor((angle_linear_fit_gradient_ * angle) + angle_linear_fit_constant_);
+	int encoder_count = (int) floor((angle_linear_fit_gradient_ * angle) + angle_linear_fit_constant_);	
 	
 	// Check the encoder position against the boundaries if boundaries enabled
 	// Check Max limit
@@ -548,7 +548,7 @@ bool Shooter::SetPitchAngle(float angle, float speed) {
 			return true;
 		}
 	}
-
+	
 	// Check to see if we've reached the proper height
 	if (abs(encoder_count - encoder_count_) <= encoder_threshold_) {
 		pitch_controller_->Set(0, 0);
@@ -559,17 +559,6 @@ bool Shooter::SetPitchAngle(float angle, float speed) {
 		// Calculate the direction needed to move, and turn into a speed
 		if ((encoder_count - encoder_count_) > 0) {
 			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
-				movement_direction = pitch_up_direction_ * speed * auto_far_speed_ratio_;
-			}
-			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
-				movement_direction = pitch_up_direction_ * speed * auto_medium_speed_ratio_;
-			}
-			else {
-				movement_direction = pitch_up_direction_ * speed * auto_near_speed_ratio_;
-			}
-		}
-		else {
-			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
 				movement_direction = pitch_down_direction_ * speed * auto_far_speed_ratio_;
 			}
 			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
@@ -577,6 +566,17 @@ bool Shooter::SetPitchAngle(float angle, float speed) {
 			}
 			else {
 				movement_direction = pitch_down_direction_ * speed * auto_near_speed_ratio_;
+			}
+		}
+		else {
+			if (abs(encoder_count - encoder_count_) > auto_far_encoder_threshold_){
+				movement_direction = pitch_up_direction_ * speed * auto_far_speed_ratio_;
+			}
+			else if (abs(encoder_count - encoder_count_) > auto_medium_encoder_threshold_) {
+				movement_direction = pitch_up_direction_ * speed * auto_medium_speed_ratio_;
+			}
+			else {
+				movement_direction = pitch_up_direction_ * speed * auto_near_speed_ratio_;
 			}
 		}
 		
