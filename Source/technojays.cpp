@@ -22,7 +22,7 @@
 /**
  * \brief Create and initialize the robot.
  *
- * Use the default parameter file "technojays.par" and logging is disabled.
+ * Use the default parameter file "technojays.par" and logging is enabled.
 */
 TechnoJays::TechnoJays() {
 	Initialize("technojays.par", true);
@@ -68,6 +68,10 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	auto_shooter_spindown_time_ = 0.5;
 	auto_feeder_height_angle_ = 50.0;
 	auto_climbing_angle_ = 20.0;
+	auto_climb_backup_speed_ = 0.2;
+	auto_climb_headstart_encoder_count_ = 3000;
+	auto_climb_winch_speed_ = 1.0;
+	auto_climb_winch_time_ = 2.5;
 	period_ = 0.0;
 
 	// Initialize private member variables
@@ -89,6 +93,7 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 	auto_cycle_target_state_ = kFinished;
 	auto_feeder_height_state_ = kFinished;
 	auto_climbing_prep_state_ = kFinished;
+	auto_climb_state_ = kFinished;
 	
 	// Disable the watchdog timer
 	// Set this right away before we do anything else
@@ -113,6 +118,7 @@ void TechnoJays::Initialize(const char * parameters, bool logging_enabled) {
 
 	LoadParameters();
 
+	// Create the objects representing all the pieces of the robot
 	targeting_ = new Targeting("targeting.par", log_enabled_);
 	autoscript_ = new AutoScript();
 	climber_ = new Climber("climber.par", log_enabled_);
@@ -155,10 +161,15 @@ bool TechnoJays::LoadParameters() {
 		parameters_->GetValue("AUTO_SHOOTER_SPINUP_TIME", &auto_shooter_spinup_time_);
 		parameters_->GetValue("AUTO_SHOOTER_SPINDOWN_TIME", &auto_shooter_spindown_time_);
 		parameters_->GetValue("AUTO_FEEDER_HEIGHT_ANGLE", &auto_feeder_height_angle_);
-		parameters_->GetValue("AUTO_CLIMBING_ANGLE", &auto_climbing_angle_);
+		parameters_->GetValue("AUTO_CLIMBING_ANGLE", &auto_climbing_angle_);		
+		parameters_->GetValue("AUTO_CLIMBING_ENCODER_COUNT", &auto_climbing_encoder_count_);
+		parameters_->GetValue("AUTO_CLIMB_BACKUP_SPEED", &auto_climb_backup_speed_);
+		parameters_->GetValue("AUTO_CLIMB_HEADSTART_ENCODER_COUNT", &auto_climb_headstart_encoder_count_);
+		parameters_->GetValue("AUTO_CLIMB_WINCH_SPEED", &auto_climb_winch_speed_);
+		parameters_->GetValue("AUTO_CLIMB_WINCH_TIME", &auto_climb_winch_time_);
 	}
 
-	// Set the rate for the periodic methods
+	// Set the rate for the periodic functions
 	// SetPeriod is part of the base class
 	IterativeRobot::SetPeriod(period_);
 	
@@ -183,6 +194,7 @@ void TechnoJays::RobotInit() {
  * or starting/restarting timers.
 */
 void TechnoJays::DisabledInit() {
+	// Set the periodic rate for the DisabledPeriodic function to sync with the driver station input
 	IterativeRobot::SetPeriod(0);
 	
 	// Set the current state of the robot
@@ -201,10 +213,9 @@ void TechnoJays::DisabledInit() {
 
 	// Get the list of available autoscript files
 	if (autoscript_ != NULL) {
-		//autoscript_files_ = std::vector<std::string>();
 		autoscript_files_.clear();
 		int num_files_ = autoscript_->GetAvailableScripts(autoscript_files_);
-		// Set the current autoscript file to the first one found and print on the screen
+		// Set the current autoscript file to the first one found and print it on the screen
 		if (num_files_ > 0) {
 			autoscript_files_counter_ = 0;
 			autoscript_file_name_ = autoscript_files_[autoscript_files_counter_];
@@ -231,17 +242,17 @@ void TechnoJays::DisabledInit() {
 }
 
 /**
- * \brief Performs tasks that need to be executed every iteration of the
- * control loop while in Disabled mode.
+ * \brief Performs tasks periodically during the Disabled mode.
  *
- * Called continuously while the robot is disabled. Each time the program
- * returns from this function, it is immediately called again provided that the
- * state hasn’t changed.
- * This function should contain any maintenance code or routines that need to
- * run constantly.
+ * Called periodically during the Disabled mode based on a periodic timer for
+ * the class.  If the period is 0, this function is syncronized with input
+ * from the Driver Station.
+ * 
+ * This function handles everything during the disabled state before a
+ * match starts.  E.g., Changing the autonomous routine.
 */
-void TechnoJays::DisabledContinuous() {
-	// Make sure no motors are moving (to prevent motor safety errors)
+void TechnoJays::DisabledPeriodic() {
+	// Make sure that no motors are moving (to prevent motor safety errors)
 	if (drive_train_ != NULL) {
 		drive_train_->Drive(0.0, 0.0, false);
 	}
@@ -269,25 +280,13 @@ void TechnoJays::DisabledContinuous() {
 		timer_->Stop();
 		timer_->Reset();
 	}
-}
-
-/**
- * \brief Performs tasks periodically during the Disabled mode.
- *
- * Called periodically during the Disabled mode based on a periodic timer for
- * the class.  If the period is 0, this function is syncronized with input
- * from the Driver Station.
- * 
- * This function should handle user-input during the disabled state before a
- * match starts.  E.g., Changing the autonomous routine.
-*/
-void TechnoJays::DisabledPeriodic() {
-	DisabledContinuous();
 	
+	// Allow the user to cycle between the various autonomous programs while in Disabled mode
 	if (user_interface_ != NULL) {
-		// Allow the user to cycle between the various autonomous programs while in Disabled mode
+		// Check for Start button presses on the Driver controls
 		if (user_interface_->GetButtonState(UserInterface::kDriver,UserInterface::kStart) == 1 &&
 				user_interface_->ButtonStateChanged(UserInterface::kDriver,UserInterface::kStart)) {
+			// Cycle through the list of autoscript files
 			if (autoscript_ != NULL && !autoscript_files_.empty()) {
 				autoscript_files_counter_++;
 				if (autoscript_files_counter_ > (autoscript_files_.size()-1))
@@ -313,6 +312,7 @@ void TechnoJays::DisabledPeriodic() {
  * or starting/restarting timers.
 */
 void TechnoJays::AutonomousInit() {
+	// Set the periodic rate for the AutonomousPeriodic function to the value from the parameter file
 	IterativeRobot::SetPeriod(period_);
 	
 	// Reset the timer in case the camera initialization didn't
@@ -345,18 +345,18 @@ void TechnoJays::AutonomousInit() {
 }
 
 /**
- * \brief Performs tasks that need to be executed every iteration of the
- * control loop while in Autonomous mode.
+ * \brief Performs tasks periodically during the Autonomous mode.
  *
- * Called continuously while the in the autonomous part of the match. Each 
- * time the program returns from this function, it is immediately called again 
- * provided that the state hasn’t changed.
+ * Called periodically during the autonomous part of the match based on a 
+ * periodic timer for the class.
+ * Unless the period is set to a value other than 0, this is never called!
  * 
- * This function should contain the control loop for the automated routines.
- * E.g., Reading values from the sensors, or executing the selected
- * autonomous routine.
+ * This should contain the code for the autonomous routines.  For this to happen,
+ * make sure the periodic rate is set to something other than 0; something fast
+ * but not too fast to burden the processor.
 */
-void TechnoJays::AutonomousContinuous() {
+void TechnoJays::AutonomousPeriodic() {
+	// Reset the autonomous state variables
 	bool autoscript_finished = false;
 	current_command_complete_ = false;
 	
@@ -374,10 +374,13 @@ void TechnoJays::AutonomousContinuous() {
 		if ((strncmp(current_command_.command, "invalid", 255) != 0) && (strncmp(current_command_.command, "end", 255) != 0)) {
 			// Execute current autoscript command
 			// General utilities
+			// Time delay
 			if (strncmp(current_command_.command, "wait", 255) == 0) {
+				// Verify that 1 argument was provided - the time delay in seconds
 				if (current_command_.param1 == -9999)
 					current_command_complete_ = true;
 				else {
+					// If this is the first time through this function for this command, reset and start the timer
 					if (!current_command_in_progress_) {
 						timer_->Stop();
 						timer_->Reset();
@@ -388,8 +391,9 @@ void TechnoJays::AutonomousContinuous() {
 					double elapsed_time = 999.0;
 					// Get the timer value since we started moving
 					elapsed_time = timer_->Get();
-					// Calculate time left to move
+					// Calculate time left
 					time_left = (double) current_command_.param1 - elapsed_time;
+					// If the time has elapsed, stop the timer and mark this command as complete
 					if (time_left < 0) {
 						timer_->Stop();
 						current_command_complete_ = true;
@@ -397,148 +401,166 @@ void TechnoJays::AutonomousContinuous() {
 				}
 			}
 			// DriveTrain
+			// AdjustHeading
 			else if (strncmp(current_command_.command, "adjustheading", 255) == 0) {
+				// Verify that 2 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
 					current_command_complete_ = true;
+				// Call AdjustHeading with the adjustment and speed iteratively until the command is complete 
 				else {
 					if (drive_train_->AdjustHeading(current_command_.param1, current_command_.param2))
 						current_command_complete_ = true;
 				}
 			}
+			// DriveDistance
 			else if (strncmp(current_command_.command, "drivedistance", 255) == 0) {
+				// Verify that 2 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
 					current_command_complete_ = true;
+				// Call Drive with the distance and speed iteratively until the command is complete
 				else {
 					if (drive_train_->Drive((double) current_command_.param1, current_command_.param2))
 						current_command_complete_ = true;
 				}
 			}
+			// DriveTime
 			else if (strncmp(current_command_.command, "drivetime", 255) == 0) {
+				// Verify that 3 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
 					current_command_complete_ = true;
 				else {
+					// If this is the first time through this function for this command, reset and start the timer
 					if (!current_command_in_progress_) {
 						drive_train_->ResetAndStartTimer();
 						current_command_in_progress_ = true;
 					}
+					// Call Drive with the time, direction, and speed iteratively until the command is complete
 					if (drive_train_->Drive((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
 						current_command_complete_ = true;
 				}
 			}
+			// TurnHeading
 			else if (strncmp(current_command_.command, "turnheading", 255) == 0) {
+				// Verify that 2 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
 					current_command_complete_ = true;
+				// Call Turn with the heading and speed iteratively until the command is complete
 				else {
 					if (drive_train_->Turn(current_command_.param1, current_command_.param2))
 						current_command_complete_ = true;
 				}
 			}
+			// TurnTime
 			else if (strncmp(current_command_.command, "turntime", 255) == 0) {
+				// Verify that 3 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
 					current_command_complete_ = true;
 				else {
+					// If this is the first time through this function for this command, reset and start the timer
 					if (!current_command_in_progress_) {
 						drive_train_->ResetAndStartTimer();
 						current_command_in_progress_ = true;
 					}
+					// Call Turn with the time, direction, and speed iteratively until the command is complete
 					if (drive_train_->Turn((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
 						current_command_complete_ = true;
 				}
 			}
 			// Shooter
+			// PitchPosition
 			else if (strncmp(current_command_.command, "pitchposition", 255) == 0) {
+				// Verify that 2 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
 					current_command_complete_ = true;
+				// Call SetPitch with the encoder position and speed iteratively until the command is complete
 				else {
 					if (shooter_->SetPitch((int) current_command_.param1, current_command_.param2))
 						current_command_complete_ = true;
 				}
 			}
+			// PitchTime
 			else if (strncmp(current_command_.command, "pitchtime", 255) == 0) {
+				// Verify that 3 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
 					current_command_complete_ = true;
 				else {
+					// If this is the first time through this function for this command, reset and start the timer
 					if (!current_command_in_progress_) {
 						shooter_->ResetAndStartTimer();
 						current_command_in_progress_ = true;
 					}
+					// Call SetPitch with the time, direction, and speed iteratively until the command is complete
 					if (shooter_->SetPitch((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
 						current_command_complete_ = true;
 				}
 			}
+			// PitchAngle
 			else if (strncmp(current_command_.command, "pitchangle", 255) == 0) {
+				// Verify that 2 arguments were provided
 				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
 					current_command_complete_ = true;
+				// Call SetPitchAngle with the angle and speed iteratively until the command is complete
 				else {
 					if (shooter_->SetPitchAngle(current_command_.param1, current_command_.param2))
 						current_command_complete_ = true;
 				}
 			}
+			// Shoot
 			else if (strncmp(current_command_.command, "shoot", 255) == 0) {
+				// Verify that 1 argument was provided
 				if (current_command_.param1 == -9999)
 					current_command_complete_ = true;
 				else {
+					// If this is the first time through this function for this command, reset the state variable
 					if (!current_command_in_progress_) {
 						auto_shoot_state_ = kStep1;
 						current_command_in_progress_ = true;
 					}
+					// Call AutoShoot with the power iteratively until the command is complete
 					if (AutoShoot((int) current_command_.param1))
 						current_command_complete_ = true;
 				}
 			}
+			// RapidFire
 			else if (strncmp(current_command_.command, "rapidfire", 255) == 0) {
+				// If this is the first time through this function for this command, reset the state variable
 				if (!current_command_in_progress_) {
 					auto_rapid_fire_state_ = kStep1;
 					current_command_in_progress_ = true;
 				}
+				// Call AutoRapidFire iteratively until the command is complete
 				if (AutoRapidFire())
 					current_command_complete_ = true;
 			}
-			// Climber
-			/*else if (strncmp(current_command_.command, "climberposition", 255) == 0) {
-				if (current_command_.param1 == -9999 || current_command_.param2 == -9999)
-					current_command_complete_ = true;
-				else {
-					if (climber_->Set((int) current_command_.param1, current_command_.param2))
-						current_command_complete_ = true;
-				}
-			}
-			else if (strncmp(current_command_.command, "climbertime", 255) == 0) {
-				if (current_command_.param1 == -9999 || current_command_.param2 == -9999 || current_command_.param3 == -9999)
-					current_command_complete_ = true;
-				else {
-					if (!current_command_in_progress_) {
-						climber_->ResetAndStartTimer();
-						current_command_in_progress_ = true;
-					}
-					if (climber_->Set((double) current_command_.param1, (Direction) current_command_.param2, current_command_.param3))
-						current_command_complete_ = true;
-				}
-			}*/
 			// Targeting
+			// FindTarget
 			else if (strncmp(current_command_.command, "findtarget", 255) == 0) {
+				// Verify that 1 argument was provided
 				if (current_command_.param1 == -9999)
 					current_command_complete_ = true;
 				else {
+					// If this is the first time through this function for this command, reset the state variable
 					if (!current_command_in_progress_) {
 						auto_find_target_state_ = kStep1;
 						current_command_in_progress_ = true;
 					}
+					// Call AutoFindTarget iteratively until the command is complete
 					if (AutoFindTarget((Targeting::TargetHeight) current_command_.param1))
 						current_command_complete_ = true;
 				}
 			}
-			// Catchall
+			// Catchall - anything else just mark as complete
 			else {
 				current_command_complete_ = true;
 			}
 			
-			// Get new command if current is finished
+			// Get next command if current is finished
 			if (current_command_complete_) {
 				current_command_in_progress_ = false;
 				current_command_ = autoscript_->GetNextCommand();
 			}
 		}
+		// No more commands, autoscript is finished
 		else {
 			autoscript_finished = true;
 		}
@@ -549,6 +571,7 @@ void TechnoJays::AutonomousContinuous() {
 	
 	// If no autoscript or we're done, do nothing
 	if (autoscript_finished) {
+		// Set all the motors to inactive to prevent motor safety errors
 		if (drive_train_ != NULL) {
 			drive_train_->Drive(0.0, 0.0, false);
 		}
@@ -565,21 +588,6 @@ void TechnoJays::AutonomousContinuous() {
 }
 
 /**
- * \brief Performs tasks periodically during the Autonomous mode.
- *
- * Called periodically during the autonomous part of the match based on a 
- * periodic timer for the class.
- * Unless the period is set to a value other than 0, this is never called!
- * 
- * This should be empty, unless there is a periodic behavior needed.  If
- * this is the case, the period must be set in AutonomousInit(), then
- * changed back to 0 in TeleopInit() and DisabledInit().
-*/
-void TechnoJays::AutonomousPeriodic() {
-	AutonomousContinuous();
-}
-
-/**
  * \brief Prepares the robot for Teleop mode.
  *
  * Called when the robot enters the teleop period for the first time. This is
@@ -590,7 +598,10 @@ void TechnoJays::AutonomousPeriodic() {
  * starting/restarting timers.
 */
 void TechnoJays::TeleopInit() {
-	IterativeRobot::SetPeriod(0);
+	// Normally we would set the period to sync with the driver station, but to handle
+	// autonomous routines during teleop, we need the loop to execute a little faster
+	//IterativeRobot::SetPeriod(0);
+	IterativeRobot::SetPeriod(period_);
 	
 	// Reset the timer in case the camera initialization didn't
 	timer_->Stop();
@@ -612,18 +623,17 @@ void TechnoJays::TeleopInit() {
 }
 
 /**
- * \brief Performs tasks that need to be executed every iteration of the
- * control loop while in Teleop mode.
+ * \brief Performs tasks periodically during the Teleop mode.
  *
- * Called continuously while in the teleop part of the match. Each time the 
- * program returns from this function, it is immediately called again provided 
- * that the state hasn’t changed.
+ * Called periodically during the teleoperation part of the match based on a 
+ * periodic timer for the class.  If the period is 0, this function is
+ * syncronized with input from the Driver Station.
  * 
- * This function should contain code that does NOT depend on user input, or
- * that needs to run constantly.  E.g., Reading values from the sensors or
- * running the semi-autonomous functions when requested from TeleopPeriodic().
+ * This function should contain code that is dependent on user input, and code
+ * that handles autonomous routines during teleop.  E.g., Driving the robot, moving arms,
+ * performing user requested semi-autonomous functions.
 */
-void TechnoJays::TeleopContinuous() {
+void TechnoJays::TeleopPeriodic() {
 	// Read sensor values in all the objects
 	if (shooter_ != NULL)
 		shooter_->ReadSensors();
@@ -648,7 +658,6 @@ void TechnoJays::TeleopContinuous() {
 			auto_rapid_fire_state_ = kFinished;
 	}
 	if (auto_shoot_state_ != kFinished) {
-		//log_->WriteLine("Calling AS in telecont\n");
 		if (AutoShoot(100))
 			auto_shoot_state_ = kFinished;
 	}
@@ -682,22 +691,12 @@ void TechnoJays::TeleopContinuous() {
 		if (AutoClimbingPrep())
 			auto_climbing_prep_state_ = kFinished;
 	}
-}
-
-/**
- * \brief Performs tasks periodically during the Teleop mode.
- *
- * Called periodically during the teleoperation part of the match based on a 
- * periodic timer for the class.  If the period is 0, this function is
- * syncronized with input from the Driver Station.
- * 
- * This function should contain code that is dependent on user input, or code
- * that is not time critical.  E.g., Driving the robot, moving arms,
- * performing user requested semi-autonomous functions.
-*/
-void TechnoJays::TeleopPeriodic() {
-	TeleopContinuous();
+	if (auto_climb_state_ != kFinished) {
+		if (AutoClimb())
+			auto_climb_state_ = kFinished;		
+	}
 	
+	// Perform user controlled actions if a UI is present
 	if (user_interface_ != NULL) {
 		float driver_left_y = 0.0;
 		float driver_right_y = 0.0;
@@ -739,6 +738,13 @@ void TechnoJays::TeleopPeriodic() {
 		} else {
 			scoring_turbo_ = false;
 		}
+
+		// Check if encoder limits should be ignored
+		if (user_interface_->GetButtonState(UserInterface::kScoring, UserInterface::kLeftBumper) == 1 && shooter_ != NULL) {
+			shooter_->IgnoreEncoderLimits(true);
+		} else {
+			shooter_->IgnoreEncoderLimits(false);
+		}
 		
 		// Check if a TeleOp Auto routine is requested
 		// AutoShoot
@@ -765,6 +771,7 @@ void TechnoJays::TeleopPeriodic() {
 			auto_cycle_target_state_ = kFinished;
 			auto_feeder_height_state_ = kFinished;
 			auto_climbing_prep_state_ = kFinished;
+			auto_climb_state_ = kFinished;
 			auto_find_target_state_ = kStep1;
 			memset(output_buffer_, 0, sizeof(output_buffer_));
 			sprintf(output_buffer_, "Find Targets..");
@@ -776,6 +783,7 @@ void TechnoJays::TeleopPeriodic() {
 			auto_find_target_state_ = kFinished;
 			auto_feeder_height_state_ = kFinished;
 			auto_climbing_prep_state_ = kFinished;
+			auto_climb_state_ = kFinished;
 			auto_cycle_target_state_ = kStep1;
 		}
 		// Auto Feed Height
@@ -784,6 +792,7 @@ void TechnoJays::TeleopPeriodic() {
 			auto_find_target_state_ = kFinished;
 			auto_cycle_target_state_ = kFinished;
 			auto_climbing_prep_state_ = kFinished;
+			auto_climb_state_ = kFinished;
 			auto_feeder_height_state_ = kStep1;
 			memset(output_buffer_, 0, sizeof(output_buffer_));
 			sprintf(output_buffer_, "AutoFeedHeight..");
@@ -796,46 +805,56 @@ void TechnoJays::TeleopPeriodic() {
 			auto_find_target_state_ = kFinished;
 			auto_cycle_target_state_ = kFinished;
 			auto_feeder_height_state_ = kFinished;
+			auto_climb_state_ = kFinished;
 			auto_climbing_prep_state_ = kStep1;
 			memset(output_buffer_, 0, sizeof(output_buffer_));
 			sprintf(output_buffer_, "AutoClimbingPrep..");
 			user_interface_->OutputUserMessage(output_buffer_, true);
 		}
+		// Auto Climb
+		if (user_interface_->GetButtonState(UserInterface::kScoring, UserInterface::kBack) == 1 
+				&& user_interface_->ButtonStateChanged(UserInterface::kScoring, UserInterface::kBack)) {
+			auto_find_target_state_ = kFinished;
+			auto_cycle_target_state_ = kFinished;
+			auto_feeder_height_state_ = kFinished;
+			auto_climbing_prep_state_ = kFinished;
+			auto_climb_state_ = kStep1;
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "AutoClimbing..");
+			user_interface_->OutputUserMessage(output_buffer_, true);		
+		}
 		
 		// Manually control the robot
 		// Abort any current or currently requested autonomous routines when manual controls are used.
 		// When there isn't any user input and no autonomous routines are running, we still have to
-		//   set the motors to not moving.
+		//   set the motors to not move.
 		// The motors need to be controlled each loop iteration, or else we get motor safety errors.
 		
-		// Climber
+		// Climber / Winch
+		// If the controls are not 0, stop any autonomous routines related to the winch and control the winch
 		if (scoring_right_y != 0.0) {
-			// Even though these don't use the winch directly, they use the pitch
-			// so we don't want them running if the winch is moving.
-			auto_feeder_height_state_ = kFinished;
 			auto_find_target_state_ = kFinished;
 			auto_cycle_target_state_ = kFinished;
-			auto_climbing_prep_state_ = kFinished;
-			//TODO
-			//if (climber_ != NULL && shooter_ != NULL && shooter_->PitchClearForClimbing()) {
+			auto_climb_state_ = kFinished;
 			if (climber_ != NULL) {
 				climber_->Move(scoring_right_y, scoring_turbo_);
 			}
 		}
-		else {
-			// Don't put the auto programs above for this one since they're not directly using the winch/climber
-			// If we did, the climber/winch motor wouldn't get set to 0 while they ran and we'd get safety errors
+		// If the controls are inactive, and no relevant autonomous routines are running, set the winch to not move
+		else if (auto_climb_state_ == kFinished){
 			if (climber_ != NULL) {
 				climber_->Move(0.0, false);
 			}
 		}
 		
 		// Shooter
+		// Control the pitch
 		if (scoring_left_y != 0.0) {
 			auto_find_target_state_ = kFinished;
 			auto_cycle_target_state_ = kFinished;
 			auto_feeder_height_state_ = kFinished;
 			auto_climbing_prep_state_ = kFinished;
+			auto_climb_state_ = kFinished;
 			if (shooter_ != NULL) {
 				shooter_->MovePitch(scoring_left_y, scoring_turbo_);
 			}
@@ -843,11 +862,13 @@ void TechnoJays::TeleopPeriodic() {
 		else if (auto_find_target_state_ == kFinished
 				&& auto_cycle_target_state_ == kFinished
 				&& auto_feeder_height_state_ == kFinished
-				&& auto_climbing_prep_state_ == kFinished) {
+				&& auto_climbing_prep_state_ == kFinished
+				&& auto_climb_state_ == kFinished) {
 			if (shooter_ != NULL) {
 				shooter_->MovePitch(0.0, false);
 			}
 		}
+		// Control the shooter
 		if (user_interface_->GetButtonState(UserInterface::kScoring,UserInterface::kLeftTrigger) == 1) {
 			auto_shoot_state_ = kFinished;
 			auto_rapid_fire_state_ = kFinished;
@@ -882,13 +903,15 @@ void TechnoJays::TeleopPeriodic() {
 		if (driver_left_y != 0.0 || driver_right_y != 0.0) {
 			auto_find_target_state_ = kFinished;
 			auto_cycle_target_state_ = kFinished;
+			auto_climb_state_ = kFinished;
 			if (drive_train_ != NULL) {
 				//drive_train_->Drive(driver_left_y, driver_right_y, driver_turbo_);
 				drive_train_->TankDrive(driver_left_y, driver_right_y, driver_turbo_);
 			}
 		}
 		else if (auto_find_target_state_ == kFinished
-				&& auto_cycle_target_state_ == kFinished) {
+				&& auto_cycle_target_state_ == kFinished
+				&& auto_climb_state_ == kFinished) {
 			if (drive_train_ != NULL) {
 				//drive_train_->Drive(0.0, 0.0, false);
 				drive_train_->TankDrive(0.0, 0.0, false);
@@ -981,10 +1004,12 @@ bool TechnoJays::AimAtTarget() {
 			aim_state_ = kStep3;
 		}
 		break;
+	// Get the vertical angle
 	case kStep3:
 		degrees_off_ = targeting_->GetVerticalAngleOfTarget(&current_target_);
 		// Fall through to step 4
 		aim_state_ = kStep4;
+	// Set the pitch to match the vertical angle
 	case kStep4:
 		if (shooter_->SetPitchAngle(degrees_off_, 1.0)) {
 			aim_state_ = kFinished;
@@ -1192,7 +1217,7 @@ bool TechnoJays::AutoShoot(int power) {
 		auto_shoot_timer_->Start();
 		elapsed_time = 0.0;
 		auto_shoot_state_ = kStep4;
-		// Fall through to kStep4
+		break;
 	// Post-delay for the shooter to finish shooting
 	case kStep4:
 		// Calculate time left
@@ -1242,6 +1267,7 @@ bool TechnoJays::AutoFeederHeight() {
 	}
 	
 	switch (auto_feeder_height_state_) {
+	// Set the pitch angle to the height that matches the feeder station
 	case kStep1:
 		if (shooter_->SetPitchAngle(auto_feeder_height_angle_, 1.0)) {
 			auto_feeder_height_state_ = kFinished;
@@ -1280,8 +1306,9 @@ bool TechnoJays::AutoClimbingPrep() {
 	}
 	
 	switch (auto_climbing_prep_state_) {
+	// Set the pitch angle to the right height for climbing
 	case kStep1:
-		if (shooter_->SetPitchAngle(auto_climbing_angle_, 1.0)) {
+		if (shooter_->SetPitch(auto_climbing_encoder_count_, 1.0)) {
 			auto_climbing_prep_state_ = kFinished;
 			if (user_interface_ != NULL) {
 				memset(output_buffer_, 0, sizeof(output_buffer_));
@@ -1305,11 +1332,6 @@ bool TechnoJays::AutoClimbingPrep() {
 	return false;
 }
 
-/**
- * \brief Automatically spins up the shooter and feeds up to 4 discs.
- *
- * \return true when the operation is complete.
-*/
 bool TechnoJays::AutoRapidFire() {
 	// Abort if we don't have what we need
 	if (feeder_ == NULL || shooter_ == NULL || !feeder_->feeder_enabled_ || !shooter_->shooter_enabled_) {
@@ -1332,7 +1354,7 @@ bool TechnoJays::AutoRapidFire() {
 		auto_shoot_timer_->Start();
 		elapsed_time = 0.0;
 		auto_rapid_fire_state_ = kStep2;
-		// Fall through into kStep2
+		break;
 	// Pre-delay for the shooter to spinup
 	case kStep2:
 		// Calculate time left
@@ -1353,72 +1375,135 @@ bool TechnoJays::AutoRapidFire() {
 		elapsed_time = 0.0;
 		auto_rapid_fire_state_ = kStep4;
 		break;
-	// Post-delay for the shooter to finish shooting
+	// Post-delay for the piston
 	case kStep4:
-		// Retract feeder
-		feeder_->SetPiston(false);
 		// Calculate time left
-		time_left = auto_shooter_spindown_time_ - elapsed_time;
-		// If enough time has passed, retract to shoot another
+		time_left = 0.3 - elapsed_time;
+		// If enough time has passed, retract piston
 		if (time_left <= 0.0) {
-			auto_shoot_timer_->Stop();
+			// Retract feeder
+			feeder_->SetPiston(false);
 			auto_rapid_fire_state_ = kStep5;
-			break;
+			// Fall through to kStep3
 		} else {
 			break;
 		}
-	// Feed second disc into the shooter
-	case kStep5:
-		feeder_->SetPiston(true);
-		auto_shoot_timer_->Reset();
-		auto_shoot_timer_->Start();
-		elapsed_time = 0.0;
-		auto_rapid_fire_state_ = kStep6;
-		break;
 	// Post-delay for the shooter to finish shooting
-	case kStep6:
-		// Retract feeder
-		feeder_->SetPiston(false);
+	case kStep5:
 		// Calculate time left
 		time_left = auto_shooter_spindown_time_ - elapsed_time;
-		// If enough time has passed, retract to shoot another
+		// If enough time has passed, shoot another
 		if (time_left <= 0.0) {
 			auto_shoot_timer_->Stop();
-			auto_rapid_fire_state_ = kStep7;
-			break;
-		} else {
-			break;
+			auto_rapid_fire_state_ = kStep6;
 		}
-	// Feed third disc into the shooter
-	case kStep7:
+		break;
+	// Feed a disc into the shooter
+	case kStep6:
 		feeder_->SetPiston(true);
 		auto_shoot_timer_->Reset();
 		auto_shoot_timer_->Start();
 		elapsed_time = 0.0;
-		auto_rapid_fire_state_ = kStep8;
+		auto_rapid_fire_state_ = kStep7;
 		break;
+	// Post-delay for the piston
+	case kStep7:
+		// Calculate time left
+		time_left = 0.3 - elapsed_time;
+		// If enough time has passed, retract piston
+		if (time_left <= 0.0) {
+			// Retract feeder
+			feeder_->SetPiston(false);
+			auto_rapid_fire_state_ = kStep8;
+			// Fall through to kStep8
+		} else {
+			break;
+		}
 	// Post-delay for the shooter to finish shooting
 	case kStep8:
-		// Retract feeder
-		feeder_->SetPiston(false);
 		// Calculate time left
 		time_left = auto_shooter_spindown_time_ - elapsed_time;
-		// If enough time has passed, we're done
+		// If enough time has passed, shoot another
 		if (time_left <= 0.0) {
 			auto_shoot_timer_->Stop();
-			auto_shoot_timer_->Reset();
-			// Stop spinning the shooter motor
-			shooter_->Shoot(0);
-			auto_rapid_fire_state_ = kFinished;
-			if (user_interface_ != NULL) {
-				memset(output_buffer_, 0, sizeof(output_buffer_));
-				sprintf(output_buffer_, "Finished.");
-				user_interface_->OutputUserMessage(output_buffer_, false);
-			}
-			return true;
+			auto_rapid_fire_state_ = kStep9;
+		}
+		break;
+	// Feed a disc into the shooter
+	case kStep9:
+		feeder_->SetPiston(true);
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		elapsed_time = 0.0;
+		auto_rapid_fire_state_ = kStep10;
+		break;
+	// Post-delay for the piston
+	case kStep10:
+		// Calculate time left
+		time_left = 0.3 - elapsed_time;
+		// If enough time has passed, retract piston
+		if (time_left <= 0.0) {
+			// Retract feeder
+			feeder_->SetPiston(false);
+			auto_rapid_fire_state_ = kStep11;
+			// Fall through to kStep11
 		} else {
 			break;
 		}
+	// Post-delay for the shooter to finish shooting
+	case kStep11:
+		// Calculate time left
+		time_left = auto_shooter_spindown_time_ - elapsed_time;
+		// If enough time has passed, shoot another
+		if (time_left <= 0.0) {
+			auto_shoot_timer_->Stop();
+			auto_rapid_fire_state_ = kStep12;
+		}
+		break;
+		// Feed a disc into the shooter
+	case kStep12:
+		feeder_->SetPiston(true);
+		auto_shoot_timer_->Reset();
+		auto_shoot_timer_->Start();
+		elapsed_time = 0.0;
+		auto_rapid_fire_state_ = kStep13;
+		break;
+	// Post-delay for the piston
+	case kStep13:
+		// Calculate time left
+		time_left = 0.3 - elapsed_time;
+		// If enough time has passed, retract piston
+		if (time_left <= 0.0) {
+			// Retract feeder
+			feeder_->SetPiston(false);
+			auto_rapid_fire_state_ = kStep14;
+			// Fall through to kStep14
+		} else {
+			break;
+		}
+	// Post-delay for the shooter to finish shooting
+	case kStep14:
+		// Calculate time left
+		time_left = auto_shooter_spindown_time_ - elapsed_time;
+		// If enough time has passed, shoot another
+		if (time_left <= 0.0) {
+			auto_shoot_timer_->Stop();
+			auto_rapid_fire_state_ = kStep15;
+		}
+		break;
+	// Post-delay for the shooter to finish shooting
+	case kStep15:
+		auto_shoot_timer_->Stop();
+		auto_shoot_timer_->Reset();
+		// Stop spinning the shooter motor
+		shooter_->Shoot(0);
+		auto_rapid_fire_state_ = kFinished;
+		if (user_interface_ != NULL) {
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "Finished.");
+			user_interface_->OutputUserMessage(output_buffer_, false);
+		}
+		return true;
 	default:
 		shooter_->Shoot(0);
 		auto_rapid_fire_state_ = kFinished;
@@ -1433,4 +1518,70 @@ bool TechnoJays::AutoRapidFire() {
 	return false;
 }
 
+/**
+ * \brief Automatically climb.
+ *
+ * \return true when the operation is complete.
+*/
+bool TechnoJays::AutoClimb() {
+	// Abort if we don't have what we need
+	if (shooter_ == NULL || climber_ == NULL || drive_train_ == NULL) {
+		auto_climb_state_ = kFinished;
+		return true;
+	}
+
+	// Keep backing up slowly while trying to climb
+	drive_train_->Drive(auto_climb_backup_speed_, 0.0, false);
+	
+	switch (auto_climb_state_) {
+	// Lower the pitch for a while to give it a headstart on the winch, since the winch runs faster
+	case kStep1:
+		if (shooter_->SetPitch(auto_climb_headstart_encoder_count_, 1.0)) {
+			auto_climb_pitch_finished_ = false;
+			auto_climb_winch_finished_ = false;
+			auto_climb_state_ = kStep2;
+		}
+		break;
+	// Lower the pitch and use the winch in parallel to climb
+	case kStep2:
+		if (!auto_climb_pitch_finished_) {
+			if (shooter_->SetPitch(auto_climbing_encoder_count_, 1.0)) {
+				auto_climb_pitch_finished_ = true;
+			}
+		}
+		if (!auto_climb_winch_finished_) {
+			if (climber_->Set(auto_climb_winch_time_, kDown, auto_climb_winch_speed_)) { // I know it should be kUp, but the controls are inverted
+				auto_climb_winch_finished_ = true;
+			}
+		}
+		// Make sure both the winch and the pitch are finished moving before continuing
+		if (auto_climb_winch_finished_ && auto_climb_pitch_finished_) {
+			auto_climb_state_ = kStep3;
+		}
+		break;
+	// Stop driving, because we should be hanging
+	case kStep3:
+		auto_climb_state_ = kFinished;
+		drive_train_->Drive(0.0, 0.0, false);
+		if (user_interface_ != NULL) {
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "Finished.");
+			user_interface_->OutputUserMessage(output_buffer_, false);
+		}
+		return true;
+	default:
+		auto_climb_state_ = kFinished;
+		drive_train_->Drive(0.0, 0.0, false);
+		if (user_interface_ != NULL) {
+			memset(output_buffer_, 0, sizeof(output_buffer_));
+			sprintf(output_buffer_, "Finished.");
+			user_interface_->OutputUserMessage(output_buffer_, false);
+		}
+		return true;
+	}
+
+	return false;
+}
+
+// Macro to link everything with the parent class
 START_ROBOT_CLASS(TechnoJays);

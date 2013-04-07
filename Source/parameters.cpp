@@ -91,20 +91,20 @@ bool Parameters::ReadValues() {
 			// Try to format the value as a number
 			// Also search for anything after the number as a comment
 			match_count = sscanf(buffer, "%s = %f %[^\n]", parameter, &value_float, comment);
+			// If at least a parameter name and value were found, store the name/number pair
 			if (match_count >= 2) {
-				//std::cout << "Name: " << parameter << ", Value: " << value_float << ", Comment: " << comment << "\n";
 				number_parameters_[parameter] = value_float;
 				continue;
 			}
 			// Try to format the value as a string
 			// Also search for anything after a '#' as a comment
 			match_count = sscanf(buffer, "%s = %[^#\n] %[^\n]", parameter, value_string, comment);
+			// If at least a parameter name and value were found, store the name/string pair
 			if (match_count >= 2) {
 				// Remove any extra whitespace between the string value and the '#' if it exists
 				if (strlen(value_string) > 0 && value_string[strlen(value_string)-1] == ' ') {
 					value_string[strlen(value_string)-1] = 0;
 				}
-				//std::cout << "Name: " << parameter << ", Value: " << value_string << ", Comment: " << comment << "\n";
 				string_parameters_[parameter] = value_string;
 				continue;
 			}
@@ -132,12 +132,16 @@ bool Parameters::ReadValues() {
  * \return true if successful.
 */
 bool Parameters::GetValue(const char * parameter, char * value) {
+	// Search for the parameter name in the list of parameters
 	string_parameters_iterator_ = string_parameters_.find(parameter);
 	// If the iterator is not set to the end, then we found a match
 	if (string_parameters_iterator_ != string_parameters_.end()) {
+		// Get the string corresponding to the parameter name
 		std::string temp_string = string_parameters_iterator_->second;
+		// Create a new empty character array
 		char * new_string = new char[temp_string.size() + 1];
 		new_string[temp_string.size()] = 0;
+		// Copy the string contents into the character array/pointer
 		memcpy(new_string, temp_string.c_str(), temp_string.size());
 		memcpy(value, new_string, strlen(new_string));
 		SafeDelete(new_string);
@@ -161,6 +165,7 @@ bool Parameters::GetValue(const char * parameter, char * value) {
  * \return true if successful.
 */
 bool Parameters::GetValue(const char * parameter, int * value) {
+	// Search for the parameter name in the list of parameters
 	number_parameters_iterator_ = number_parameters_.find(parameter);
 	// If the iterator is not set to the end, then we found a match
 	if (number_parameters_iterator_ != number_parameters_.end()) {
@@ -185,6 +190,7 @@ bool Parameters::GetValue(const char * parameter, int * value) {
  * \return true if successful.
 */
 bool Parameters::GetValue(const char * parameter, float * value) {
+	// Search for the parameter name in the list of parameters
 	number_parameters_iterator_ = number_parameters_.find(parameter);
 	// If the iterator is not set to the end, then we found a match
 	if (number_parameters_iterator_ != number_parameters_.end()) {
@@ -209,6 +215,7 @@ bool Parameters::GetValue(const char * parameter, float * value) {
  * \return true if successful.
 */
 bool Parameters::GetValue(const char * parameter, double * value) {
+	// Search for the parameter name in the list of parameters
 	number_parameters_iterator_ = number_parameters_.find(parameter);
 	// If the iterator is not set to the end, then we found a match
 	if (number_parameters_iterator_ != number_parameters_.end()) {

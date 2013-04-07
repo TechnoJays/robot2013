@@ -33,13 +33,10 @@ public:
 	bool LoadParameters();
 	void RobotInit();
 	void DisabledInit();
-	void DisabledContinuous();
 	void DisabledPeriodic();
 	void AutonomousInit();
-	void AutonomousContinuous();
 	void AutonomousPeriodic();
 	void TeleopInit();
-	void TeleopContinuous();
 	void TeleopPeriodic();
 
 	// Public member variables
@@ -47,6 +44,7 @@ public:
 	
 private:
 	// Private enums
+	// Store the current state of autonomous functions/state machines
 	enum AutoState {
 		kStep1,
 		kStep2,
@@ -58,6 +56,11 @@ private:
 		kStep8,
 		kStep9,
 		kStep10,
+		kStep11,
+		kStep12,
+		kStep13,
+		kStep14,
+		kStep15,
 		kFinished
 	};
 	
@@ -65,6 +68,7 @@ private:
 	bool AimAtTarget();
 	bool AutoFeederHeight();
 	bool AutoClimbingPrep();
+	bool AutoClimb();
 	bool AutoFindTarget(Targeting::TargetHeight height);
 	bool AutoRapidFire();
 	bool AutoShoot(int power);
@@ -96,6 +100,11 @@ private:
 	float auto_shooter_spindown_time_;		///< the amount of time to spin down the shooter after feeding a disc
 	float auto_feeder_height_angle_;		///< the angle of the shooter required to set the feeder to the height for the feeder station
 	float auto_climbing_angle_;				///< the angle of the shooter required to be out of the way for climbing
+	int auto_climbing_encoder_count_;		///< the encoder count of the shooter required to be out of the way for climbing
+	float auto_climb_backup_speed_;			///< the backup speed to drive while autoclimbing
+	int auto_climb_headstart_encoder_count_;///< the encoder count of the shooter to have a headstart for auto climbing
+	float auto_climb_winch_speed_;			///< the winch speed during auto climbing
+	float auto_climb_winch_time_;			///< the winch duration during auto climbing
 	double period_;							///< the period in seconds for the periodic loops
 	
 	// Private member variables
@@ -115,6 +124,8 @@ private:
 	float target_report_heading_;				///< the heading of the robot when the target report was generated
 	double degrees_off_;						///< the number of degrees the robot is off from facing the selected target
 	unsigned current_target_vector_location_;	///< the index in the particle report vector of the current target, used when cycling through targets
+	bool auto_climb_pitch_finished_;			///< true when the pitch is finished moving during auto climb
+	bool auto_climb_winch_finished_;			///< true when the winch is finished moving during auto climb
 	AutoState auto_shoot_state_;				///< the current state of the AutoShoot autonomous function
 	AutoState aim_state_;						///< the current state of the AimAtTarget function
 	AutoState auto_find_target_state_;			///< the current state of the AutoFindTarget function
@@ -122,6 +133,7 @@ private:
 	AutoState auto_cycle_target_state_;			///< the current state of the AutoCycleTarget function
 	AutoState auto_feeder_height_state_;		///< the current state of the AutoFeederHeight function
 	AutoState auto_climbing_prep_state_;		///< the current state of the AutoClimbingPrep function
+	AutoState auto_climb_state_;				///< the current state of the AutoClimb function
 };
 
 #endif

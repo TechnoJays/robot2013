@@ -40,6 +40,7 @@ public:
 	bool PitchClearForClimbing();
 	void Shoot(int power_as_percent);
 	bool Shoot(double time, int power_as_percent);
+	void IgnoreEncoderLimits(bool state);
 	
 	// Public member variables
 	bool encoder_enabled_;	///< true if the pitch encoder is present and initialized
@@ -89,6 +90,7 @@ private:
 	bool log_enabled_;			///< true if logging is enabled
 	char parameters_file_[25];	///< path and filename of the parameter file to read
 	ProgramState robot_state_;	///< current state of the robot obtained from the field
+	bool ignore_encoder_limits_;
 };
 
 #endif

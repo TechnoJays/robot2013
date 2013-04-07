@@ -1,0 +1,9 @@
+drivetime,0.5,3,1.0
+drivetime,0.1,2,1.0
+pitchposition,2000,1.0
+shoot,100
+wait,0.2
+shoot,100
+wait,0.2
+shoot,100
+end

@@ -333,6 +333,8 @@ void DriveTrain::ReadSensors() {
 	if (gyro_enabled_) {
 		gyro_angle_ = gyro_->GetAngle();
 	}
+
+	// Get the acceleration, and pseudo-double-integrate accel to get distance by multiplying by time^2 
 	if (accelerometer_enabled_) {
 		acceleration_ = accelerometer_->GetAcceleration((ADXL345_I2C::Axes) accelerometer_axis_);
 		if (acceleration_timer_ != NULL) {
@@ -379,6 +381,7 @@ void DriveTrain::SetRobotState(ProgramState state) {
 		timer_->Stop();
 	}
 	
+	// On state change, reset distance traveled
 	if (accelerometer_enabled_) {
 		if (acceleration_timer_ != NULL) {
 			acceleration_timer_->Stop();
@@ -450,6 +453,7 @@ bool DriveTrain::AdjustHeading(float adjustment, float speed) {
 		return true;
 	}
 	
+	// If this is the first time the iterative function is called, store the initial heading before we start turning
 	if (!adjustment_in_progress_) {
 		initial_heading_ = gyro_angle_;
 		adjustment_in_progress_ = true;

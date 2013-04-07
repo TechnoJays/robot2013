@@ -96,6 +96,7 @@ void UserInterface::Initialize(const char * parameters, bool logging_enabled) {
 
 	// Create a new data log object
 	log_ = new DataLog("userinterface.log");
+	
 	// Get the Driver Station LCD object
 	driver_station_lcd_ = DriverStationLCD::GetInstance();
 	

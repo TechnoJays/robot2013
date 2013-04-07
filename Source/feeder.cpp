@@ -199,25 +199,18 @@ bool Feeder::LoadParameters() {
 */
 void Feeder::SetRobotState(ProgramState state) {
 	robot_state_ = state;
-		
+
+	// Make sure the compressor is running in every state
+	if (compressor_enabled_) {
+		if (!compressor_->Enabled())
+			compressor_->Start();
+	}
+
 	if (state == kDisabled) {
-		if (compressor_enabled_) {
-			//compressor_->Stop();
-			if (!compressor_->Enabled())
-				compressor_->Start();
-		}
 	}
 	else if (state == kTeleop) {
-		if (compressor_enabled_) {
-			if (!compressor_->Enabled())
-				compressor_->Start();
-		}
 	}
 	else if (state == kAutonomous) {
-		if (compressor_enabled_) {
-			if (!compressor_->Enabled())
-				compressor_->Start();
-		}
 	}
 }
 

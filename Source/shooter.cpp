@@ -116,6 +116,7 @@ void Shooter::Initialize(char * parameters, bool logging_enabled) {
 	encoder_count_ = 0;
 	log_enabled_ = false;
 	robot_state_ = kDisabled;
+	ignore_encoder_limits_ = false;
 
 	// Create a new data log object
 	log_ = new DataLog("shooter.log");
@@ -315,11 +316,13 @@ void Shooter::ResetAndStartTimer() {
 */
 void Shooter::SetRobotState(ProgramState state) {
 	robot_state_ = state;
-	
+
+	// Stop the timer on any state change
 	if (timer_ != NULL) {
 		timer_->Stop();
 	}
 	
+	// Adjust motor safety checks depending on the robot state
 	if (state == kDisabled) {
 		if (pitch_enabled_)
 			pitch_controller_->SetSafetyEnabled(true);
@@ -389,14 +392,14 @@ bool Shooter::SetPitch(int encoder_count, float speed) {
 	
 	// Check the encoder position against the boundaries if boundaries enabled
 	// Check Max limit
-	if (encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
+	if (!ignore_encoder_limits_ && encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
 		if (encoder_count_ > encoder_max_limit_) {
 			pitch_controller_->Set(0, 0);
 			return true;
 		}
 	}
 	// Check Min limit
-	if (encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
+	if (!ignore_encoder_limits_ && encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
 		if (encoder_count_ < encoder_min_limit_) {
 			pitch_controller_->Set(0, 0);
 			return true;
@@ -468,7 +471,7 @@ bool Shooter::SetPitch(double time, Direction direction, float speed) {
 	if (encoder_enabled_) {
 		// Check the encoder position against the boundaries if boundaries enabled
 		// Check Max limit
-		if (encoder_max_limit_ > 0 && direction == kDown) {
+		if (!ignore_encoder_limits_ && encoder_max_limit_ > 0 && direction == kDown) {
 			if (encoder_count_ > encoder_max_limit_) {
 				pitch_controller_->Set(0, 0);
 				timer_->Stop();
@@ -476,7 +479,7 @@ bool Shooter::SetPitch(double time, Direction direction, float speed) {
 			}
 		}
 		// Check Min limit
-		if (encoder_min_limit_ > 0 && direction == kUp) {
+		if (!ignore_encoder_limits_ && encoder_min_limit_ > 0 && direction == kUp) {
 			if (encoder_count_ < encoder_min_limit_) {
 				pitch_controller_->Set(0, 0);
 				timer_->Stop();
@@ -535,14 +538,14 @@ bool Shooter::SetPitchAngle(float angle, float speed) {
 	
 	// Check the encoder position against the boundaries if boundaries enabled
 	// Check Max limit
-	if (encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
+	if (!ignore_encoder_limits_ && encoder_max_limit_ > 0 && (encoder_count > encoder_count_)) {
 		if (encoder_count_ > encoder_max_limit_) {
 			pitch_controller_->Set(0, 0);
 			return true;
 		}
 	}
 	// Check Min limit
-	if (encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
+	if (!ignore_encoder_limits_ && encoder_min_limit_ > 0 && (encoder_count < encoder_count_)) {
 		if (encoder_count_ < encoder_min_limit_) {
 			pitch_controller_->Set(0, 0);
 			return true;
@@ -597,24 +600,27 @@ void Shooter::MovePitch(float directional_speed, bool turbo) {
 	if (!pitch_enabled_)
 		return;
 	
+	// Apply the controls inversion to the requested movement
 	directional_speed = directional_speed * invert_multiplier_;
+	
 	// Set the encoder couting to match movement direction
 	if (encoder_enabled_) {
 		// Check the encoder position against the boundaries if boundaries enabled
 		// Check Max limit
-		if (encoder_max_limit_ > 0 && ((directional_speed * pitch_down_direction_) > 0)) {
+		if (!ignore_encoder_limits_ && encoder_max_limit_ > 0 && ((directional_speed * pitch_down_direction_) > 0)) {
 			if (encoder_count_ > encoder_max_limit_) {
 				directional_speed = 0.0;
 			}
 		}
 		// Check Min limit
-		if (encoder_min_limit_ > 0 && ((directional_speed * pitch_up_direction_) > 0)) {
+		if (!ignore_encoder_limits_ && encoder_min_limit_ > 0 && ((directional_speed * pitch_up_direction_) > 0)) {
 			if (encoder_count_ < encoder_min_limit_) {
 				directional_speed = 0.0;
 			}
 		}
 	}
 
+	// Apply turbo if requested to the speed
 	if (turbo) {
 		directional_speed = directional_speed * pitch_turbo_speed_ratio_;
 	}
@@ -661,6 +667,7 @@ void Shooter::Shoot(int power_as_percent) {
 	
 	float shooting_power_as_speed = 0.0;
 	
+	// Take the power percentage and convert to a speed between 0 and 1.0 (or -1.0)
 	if (power_as_percent == 0) {
 		shooting_power_as_speed = 0.0;
 	}
@@ -722,4 +729,13 @@ bool Shooter::Shoot(double time, int power_as_percent) {
 		shooter_controller_->Set(shooting_power_as_speed, 0);
 		return false;
 	}	
+}
+
+/**
+ * \brief Sets whether the encoder limits should be ignored or not.
+ *
+ * \param state true if the encoder limits should be ignored
+ */
+void Shooter::IgnoreEncoderLimits(bool state) {
+	ignore_encoder_limits_ = state;
 }

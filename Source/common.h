@@ -3,6 +3,7 @@
 
 #include <ctype.h>
 
+// Macros to delete pointers
 #define SafeDelete(pointer) if((pointer))\
 { delete(pointer); pointer = NULL;}
 
@@ -13,6 +14,7 @@
 { for (unsigned int i=0; i<sizeof(arraypointer); i++) {\
 	if (arraypointer[i]) arraypointer[i]=tolower(arraypointer[i]);}}
 
+// General directional enum
 enum Direction {
 	kLeft,
 	kRight,
@@ -22,6 +24,7 @@ enum Direction {
 	kDown
 };
 
+// Robot state enum
 enum ProgramState {
 	kDisabled,
 	kAutonomous,

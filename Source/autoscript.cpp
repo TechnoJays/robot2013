@@ -154,11 +154,13 @@ int AutoScript::GetAvailableScripts(std::vector<std::string> &files) {
 	struct dirent *dirp;
 	char *extension_ptr;
 	char ext[10];
-	
+
+	// Open the current directory - '/' on the cRIO
 	if((dp  = opendir(".")) == NULL) {
 		return -1;
 	}
 
+	// Loop through all the files found, and add those with a '.as' extension to the autoscript file list
 	while ((dirp = readdir(dp)) != NULL) {
 		extension_ptr=strrchr(dirp->d_name,'.');
 		if (extension_ptr != NULL) {
@@ -171,6 +173,7 @@ int AutoScript::GetAvailableScripts(std::vector<std::string> &files) {
 		}
 	}
 	
+	// Close the current directory and return the number of '.as' files found
 	closedir(dp);
 	return file_count_;
 }

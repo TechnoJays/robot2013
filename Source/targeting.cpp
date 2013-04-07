@@ -221,6 +221,7 @@ bool Targeting::LoadParameters() {
 		parameters_->GetValue("TARGET_RECTANGLE_SCORE_THRESHOLD",&target_rectangle_score_threshold_);
 	}
 
+	// Check if the camera is enabled or not
 	if (camera_present)
 		camera_enabled_ = true;
 	else
@@ -248,6 +249,7 @@ bool Targeting::LoadParameters() {
 void Targeting::SetRobotState(ProgramState state) {
 	robot_state_ = state;
 	
+	// Enable or disable target searching depending on robot state
 	if (state == kDisabled) {
 		StopSearching();
 	}
@@ -353,6 +355,8 @@ double Targeting::GetCameraHeightOfTarget(ParticleAnalysisReport *target) {
 */
 Targeting::TargetHeight Targeting::GetEnumHeightOfTarget(ParticleAnalysisReport *target) {
 	double height = GetCameraHeightOfTarget(target);
+	
+	// Convert a height value to an enumeration
 	if (height == 9.177083) {
 		return Targeting::kHigh;
 	}
@@ -374,6 +378,7 @@ Targeting::TargetHeight Targeting::GetEnumHeightOfTarget(ParticleAnalysisReport 
  * \return the height as an enumeration.
 */
 Targeting::TargetHeight Targeting::GetEnumHeightOfTarget(double height) {
+	// Convert a height value to an enumeration
 	if (height == 9.177083) {
 		return Targeting::kHigh;
 	}
@@ -395,6 +400,7 @@ Targeting::TargetHeight Targeting::GetEnumHeightOfTarget(double height) {
  * \param buffer the characeter array to contain the height as a character array.
 */
 void Targeting::GetStringHeightOfTarget(TargetHeight target_height, char *buffer) {
+	// Convert a height enumeration to a string
 	switch(target_height) {
 	case Targeting::kHigh:
 		strncpy(buffer, "High", sizeof(buffer));
@@ -432,9 +438,9 @@ bool Targeting::GetTargets(vector<ParticleAnalysisReport> &report) {
 	if (!camera_enabled_) {
 		return false;
 	}
-	
+
+	// Block other threads from accessing the particle report while it's copied
 	CRITICAL_REGION(find_targets_semaphore_)
-	//if (particle_report_ != NULL && !particle_report_->empty()) {
 	if (particle_report_ != NULL) {
 		// Copy the report to the referenced vector passed in
 		report.resize(particle_report_->size());
@@ -451,9 +457,12 @@ bool Targeting::GetTargets(vector<ParticleAnalysisReport> &report) {
  * \brief Sets the camera settings using the values from the parameter file.
 */
 void Targeting::InitializeCamera() {
+	// Only continue if we haven't already done this
 	if (camera_enabled_ && !camera_initialized_) {
+		// Get a reference to the camera
 		AxisCamera &axis_camera = AxisCamera::GetInstance();
 				
+		// Store the resolution for use in calculations
 		switch ((AxisCameraParams::Resolution_t) camera_resolution_) {
 			case AxisCameraParams::kResolution_640x480:
 				camera_horizontal_width_in_pixels_ = 640;
@@ -477,6 +486,7 @@ void Targeting::InitializeCamera() {
 				break;
 		}
 		
+		// Set the camera settings
 		axis_camera.WriteBrightness(brightness_);
 		axis_camera.WriteColorLevel(color_level_);
 		axis_camera.WriteCompression(compression_);
@@ -497,9 +507,11 @@ void Targeting::InitializeCamera() {
  * \return true if successful.
 */
 bool Targeting::StartSearching() {
+	// Abort if the camera is disabled
 	if (!camera_enabled_)
 		return false;
 	
+	// Initialize the camera if it hasn't been done yet
 	if (!camera_initialized_) {
 		InitializeCamera();
 	}
@@ -530,6 +542,7 @@ bool Targeting::StopSearching() {
 	if (!camera_enabled_)
 			return false;
 	
+	// Stop the task
 	if (find_targets_task_.Verify()) {
 		return find_targets_task_.Stop();
 	}
@@ -594,7 +607,9 @@ int Targeting::s_FindTargetsTask(Targeting *this_pointer) {
  * \return 0 on success (but the task should never finish on it's own).
 */
 int Targeting::FindTargetsTask() {
+	// Loop repeatedly
 	while (true) {
+		// Get a reference to the camera
 		AxisCamera &axis_camera = AxisCamera::GetInstance();
 		
 		try {
@@ -621,9 +636,9 @@ int Targeting::FindTargetsTask() {
 					//ParticleFilterCriteria2 criteria[] = {{IMAQ_MT_AREA_BY_PARTICLE_AND_HOLES_AREA, particle_filter_filled_minimum_, particle_filter_filled_maximum_, false, false}};
 
 					
-					// If an image was acquired, filter it based on HSL or RGB values
+					// If an image was acquired, filter it based on HSL or RGB color values
 					if (image != NULL) {
-						// Store the very first image taken by the camera
+						// Store the very first image taken by the camera (unfiltered)
 						// This will be helpful during practice and competitions to diagnose issues
 						if (!sample_images_stored_) {
 							char filename[20] = {0};
@@ -643,6 +658,7 @@ int Targeting::FindTargetsTask() {
 							color_filtered_image = image->ThresholdRGB(threshold_);
 					}
 
+					// Remove small objects, leaving only the larger blobs
 					if (color_filtered_image != NULL) {
 						/*Targeting::GenerateFilename("/2_", ".bmp", 4, filename);
 						color_filtered_image->Write(filename);*/
@@ -651,6 +667,7 @@ int Targeting::FindTargetsTask() {
 						SafeDelete(color_filtered_image);
 					}
 
+					// Perform a convex hull to 'fill-in' the blobs
 					if (large_objects_image != NULL) {
 						/*Targeting::GenerateFilename("/3_", ".bmp", 4, filename);
 						large_objects_image->Write(filename);*/
@@ -674,6 +691,7 @@ int Targeting::FindTargetsTask() {
 						SafeDelete(particle_filtered_image);
 					}*/
 					
+					// Get a particle report from the image
 					if (convex_hull_image != NULL) {
 						/*Targeting::GenerateFilename("/5_", ".bmp", 4, filename);
 						convex_hull_image->Write(filename);*/
@@ -689,12 +707,15 @@ int Targeting::FindTargetsTask() {
 						if (particle_report_ != NULL && particle_report_->size() > 0) {
 							vector<ParticleAnalysisReport>::iterator target_iterator = particle_report_->begin();
 							while (target_iterator != particle_report_->end()) {
+								// Calculate rectangle ratio
 								float rectangle_ratio = (float) target_iterator->boundingRect.width / (float) target_iterator->boundingRect.height;
+								// Calculate rectangle score
 								float rectangle_area = 	(float) target_iterator->boundingRect.width * (float) target_iterator->boundingRect.height;
 								float rectangle_score = (target_iterator->particleArea / rectangle_area) * 100.0;
 								/*printf("particle location: %i, %i\n", target_iterator->center_mass_x, target_iterator->center_mass_y);
 								printf("particle ratio: %5.2f\n", rectangle_ratio);
 								printf("particle score: %5.2f\n", rectangle_score);*/
+								// Delete bad targets
 								if (rectangle_ratio < target_rectangle_ratio_minimum_ || rectangle_ratio > target_rectangle_ratio_maximum_ || rectangle_score < target_rectangle_score_threshold_) {
 									target_iterator = particle_report_->erase(target_iterator);
 									//printf("Deleting particle\n");
@@ -730,14 +751,23 @@ int Targeting::FindTargetsTask() {
  * \param filename an empty character array that will contain the result.
 */
 void Targeting::GenerateFilename(char * prefix, char * suffix, int length, char * filename) {
+	// Acceptable characters for a filename
 	static const char alphanum[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+	
+	// Copy the filename prefix to the filename character pointer/array
 	int prefix_length = strlen(prefix);
 	strcpy(filename, prefix);
+	
+	// Generate the random part of the filename
 	for (int i = prefix_length; i<(length + prefix_length); i++) {
 		filename[i] = alphanum[rand() % (sizeof(alphanum) - 1)];
 	}
+	
+	// Copy the suffix, if there is one
 	for (int i = length + prefix_length; i < ((int) strlen(suffix) + length + prefix_length); i++) {
 		filename[i] = suffix[i-length-prefix_length];
 	}
+	
+	// Null terminate the filename character array 
 	filename[length + prefix_length + strlen(suffix)] = 0;
 }

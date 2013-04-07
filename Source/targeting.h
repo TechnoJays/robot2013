@@ -55,6 +55,7 @@ public:
 	bool camera_enabled_;		///< true if the camera is present
 
 private:
+	// Different types of color filtering
 	enum ThresholdType {
 		kHSV,
 		kHSL,
